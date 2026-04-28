@@ -9,6 +9,25 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for [P
 
 > 💡 **Building a programmatic integration?** Use the companion [`posteverywhere`](https://www.npmjs.com/package/posteverywhere) Node.js SDK instead — full TypeScript types, retry handling, error classes.
 
+## 🔗 Quick Links
+
+| Resource | URL |
+|---|---|
+| 🌐 **Homepage** | [posteverywhere.ai](https://posteverywhere.ai) |
+| 🛠️ **Developers landing page** | [posteverywhere.ai/developers](https://posteverywhere.ai/developers) |
+| 📖 **API Documentation** | [developers.posteverywhere.ai](https://developers.posteverywhere.ai) |
+| 📦 **This MCP on npm** | [npmjs.com/package/@posteverywhere/mcp](https://www.npmjs.com/package/@posteverywhere/mcp) |
+| 💻 **This MCP on GitHub** | [github.com/posteverywhere/mcp](https://github.com/posteverywhere/mcp) |
+| 📦 **Node SDK (npm)** | [npmjs.com/package/posteverywhere](https://www.npmjs.com/package/posteverywhere) |
+| 💻 **Node SDK (GitHub)** | [github.com/posteverywhere/sdk](https://github.com/posteverywhere/sdk) |
+| 🎛️ **Dashboard** | [app.posteverywhere.ai](https://app.posteverywhere.ai) |
+| 🔑 **Get an API key** | [app.posteverywhere.ai/developers](https://app.posteverywhere.ai/developers) |
+| 💵 **Pricing** | [posteverywhere.ai/pricing](https://posteverywhere.ai/pricing) |
+| 📚 **Help Center** | [posteverywhere.ai/docs/help-center](https://posteverywhere.ai/docs/help-center) |
+| 🧠 **Model Context Protocol** | [modelcontextprotocol.io](https://modelcontextprotocol.io) |
+| 🐛 **Issues / bug reports** | [github.com/posteverywhere/mcp/issues](https://github.com/posteverywhere/mcp/issues) |
+| 📧 **Support** | [support@posteverywhere.ai](mailto:support@posteverywhere.ai) |
+
 ## What is MCP?
 
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) is an open standard from [Anthropic](https://www.anthropic.com) that lets AI assistants connect to external tools and data sources. Once you connect this MCP server, your AI assistant can:
