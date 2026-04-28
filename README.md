@@ -222,9 +222,55 @@ Hitting a 429? The MCP server returns a clear `rate_limit_exceeded` code with `r
 - 📖 [Full API Reference](https://developers.posteverywhere.ai) — every tool, every parameter
 - 🔐 [Authentication & Scopes](https://developers.posteverywhere.ai/authentication)
 - ⚠️ [Error Handling](https://developers.posteverywhere.ai/errors) — including the `retryable` flag agents should respect
+- ⏱️ [Rate Limits](https://developers.posteverywhere.ai/rate-limits) — per-minute, per-hour, per-day caps
 - 🖼️ [Media Requirements](https://developers.posteverywhere.ai/media-requirements) — file size, format, aspect ratio per platform
 - 🤖 [Agent System Prompts](https://developers.posteverywhere.ai/integrations/agent-system-prompt) — recommended prompts for AI agent integrations
 - 🧠 [About MCP](https://modelcontextprotocol.io/introduction) — the open protocol behind this server
+- 🚀 [Quick Start Guide](https://developers.posteverywhere.ai/quick-start) — first post in 60 seconds
+- 🔗 [Webhooks](https://developers.posteverywhere.ai/webhooks) — receive publish events on your endpoints
+- 🏷️ [API Scopes](https://developers.posteverywhere.ai/scopes) — fine-grained permission control
+- 📋 [Changelog](https://developers.posteverywhere.ai/changelog) — what's new in the API
+
+## MCP & AI Tooling Resources
+
+- 🧠 [Model Context Protocol — Specification](https://modelcontextprotocol.io)
+- 🛠️ [MCP Quickstart for Users](https://modelcontextprotocol.io/quickstart/user)
+- 👨‍💻 [MCP Quickstart for Developers](https://modelcontextprotocol.io/quickstart/server)
+- 🗂️ [Browse all MCP servers (community list)](https://modelcontextprotocol.io/examples)
+- 💼 [Anthropic — MCP announcement](https://www.anthropic.com/news/model-context-protocol)
+- 🔧 [Claude Code — Get started](https://docs.claude.com/en/docs/claude-code/overview)
+- 🔧 [Claude Code — MCP setup](https://docs.claude.com/en/docs/claude-code/mcp)
+- 🖥️ [Claude Desktop](https://claude.ai/download)
+- 🖱️ [Cursor — MCP docs](https://docs.cursor.com/context/model-context-protocol)
+- 💬 [Anthropic Claude](https://claude.ai)
+
+## PostEverywhere Around the Web
+
+- 🌐 [PostEverywhere Homepage](https://posteverywhere.ai)
+- 🛠️ [Developers Landing Page](https://posteverywhere.ai/developers) — overview of API, SDK, MCP, integrations
+- 🤖 [AI Agents Page](https://posteverywhere.ai/agents) — using PostEverywhere with Claude, ChatGPT, Cursor, and more
+- 💵 [Pricing](https://posteverywhere.ai/pricing) — Starter ($19), Growth ($39), Pro ($79); 7-day free trial
+- ✍️ [Blog](https://posteverywhere.ai/blog) — guides, tutorials, product updates
+- 📚 [Help Center](https://posteverywhere.ai/docs/help-center) — guides, troubleshooting, FAQs
+- 🎛️ [Dashboard (sign in)](https://app.posteverywhere.ai)
+- ✨ [Sign Up — 7-day free trial](https://app.posteverywhere.ai/signup)
+- 🔑 [Get an API key](https://app.posteverywhere.ai/developers)
+- 📦 [Node.js SDK (npm)](https://www.npmjs.com/package/posteverywhere)
+- 💻 [Node.js SDK (GitHub)](https://github.com/posteverywhere/sdk)
+- 📦 [MCP Server (npm — this package)](https://www.npmjs.com/package/@posteverywhere/mcp)
+- 💻 [MCP Server (GitHub — this repo)](https://github.com/posteverywhere/mcp)
+- 🏢 [PostEverywhere on GitHub](https://github.com/posteverywhere)
+
+## Per-Platform Schedulers
+
+PostEverywhere is the backend for all of these — every plan includes every platform:
+
+- 📷 [Instagram Scheduler](https://posteverywhere.ai/instagram-scheduler) — feed posts, reels, stories, carousels
+- 🎵 [TikTok Scheduler](https://posteverywhere.ai/tiktok-scheduler) — videos, photo carousels, full content disclosure flags
+- 📺 [YouTube Scheduler](https://posteverywhere.ai/youtube-scheduler) — videos with thumbnails, tags, descriptions, privacy controls
+- 💼 [LinkedIn Scheduler](https://posteverywhere.ai/linkedin-scheduler) — personal + Company Page posts, document carousels, video
+- 👍 [Facebook Scheduler](https://posteverywhere.ai/facebook-scheduler) — Pages, Reels, video, multi-image carousels
+- 🐦 X (Twitter), Threads, Pinterest — all included on every plan
 
 ## Related
 
