@@ -23,7 +23,7 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for [P
 | 🎛️ **Dashboard** | [app.posteverywhere.ai](https://app.posteverywhere.ai) |
 | 🔑 **Get an API key** | [app.posteverywhere.ai/developers](https://app.posteverywhere.ai/developers) |
 | 💵 **Pricing** | [posteverywhere.ai/pricing](https://posteverywhere.ai/pricing) |
-| 📚 **Help Center** | [posteverywhere.ai/docs/help-center](https://posteverywhere.ai/docs/help-center) |
+| 📚 **Help Center** | [posteverywhere.ai/support](https://posteverywhere.ai/support) |
 | 🧠 **Model Context Protocol** | [modelcontextprotocol.io](https://modelcontextprotocol.io) |
 | 🐛 **Issues / bug reports** | [github.com/posteverywhere/mcp/issues](https://github.com/posteverywhere/mcp/issues) |
 | 📧 **Support** | [support@posteverywhere.ai](mailto:support@posteverywhere.ai) |
@@ -251,7 +251,7 @@ Hitting a 429? The MCP server returns a clear `rate_limit_exceeded` code with `r
 - 🤖 [AI Agents Page](https://posteverywhere.ai/agents) — using PostEverywhere with Claude, ChatGPT, Cursor, and more
 - 💵 [Pricing](https://posteverywhere.ai/pricing) — Starter ($19), Growth ($39), Pro ($79); 7-day free trial
 - ✍️ [Blog](https://posteverywhere.ai/blog) — guides, tutorials, product updates
-- 📚 [Help Center](https://posteverywhere.ai/docs/help-center) — guides, troubleshooting, FAQs
+- 📚 [Help Center](https://posteverywhere.ai/support) — guides, troubleshooting, FAQs
 - 🎛️ [Dashboard (sign in)](https://app.posteverywhere.ai)
 - ✨ [Sign Up — 7-day free trial](https://app.posteverywhere.ai/signup)
 - 🔑 [Get an API key](https://app.posteverywhere.ai/developers)
@@ -276,14 +276,14 @@ PostEverywhere is the backend for all of these — every plan includes every pla
 
 - 📦 **[`posteverywhere`](https://github.com/posteverywhere/sdk)** — Node.js / TypeScript SDK ([npm](https://www.npmjs.com/package/posteverywhere))
 - 🌐 **[posteverywhere.ai](https://posteverywhere.ai)** — Web dashboard, AI Studio, calendar UI
-- 📚 **[Help Center](https://posteverywhere.ai/docs/help-center)** — Guides, troubleshooting, FAQ
+- 📚 **[Help Center](https://posteverywhere.ai/support)** — Guides, troubleshooting, FAQ
 - 💵 **[Pricing](https://posteverywhere.ai/pricing)** — From $19/mo, 7-day free trial
 
 ## Support
 
 - 📧 Email: [support@posteverywhere.ai](mailto:support@posteverywhere.ai)
 - 🐛 Issues: [github.com/posteverywhere/mcp/issues](https://github.com/posteverywhere/mcp/issues)
-- 💬 [Help Center](https://posteverywhere.ai/docs/help-center)
+- 💬 [Help Center](https://posteverywhere.ai/support)
 
 ## License
 
