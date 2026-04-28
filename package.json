@@ -1,0 +1,69 @@
+{
+  "name": "@posteverywhere/mcp",
+  "version": "1.1.1",
+  "description": "MCP server for PostEverywhere — schedule and publish to Instagram, TikTok, YouTube, LinkedIn, Facebook, X, Threads & Pinterest from Claude Code, Claude Desktop, Cursor, and other MCP-compatible AI clients.",
+  "type": "module",
+  "bin": {
+    "posteverywhere-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "claude-desktop",
+    "anthropic",
+    "cursor",
+    "ai-agents",
+    "ai-tools",
+    "llm-tools",
+    "social-media",
+    "social-media-scheduler",
+    "social-media-management",
+    "posteverywhere",
+    "instagram",
+    "tiktok",
+    "youtube",
+    "linkedin",
+    "facebook",
+    "twitter",
+    "x",
+    "threads",
+    "pinterest",
+    "scheduling",
+    "automation",
+    "publishing",
+    "content-management"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/posteverywhere/mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/posteverywhere/mcp/issues",
+    "email": "support@posteverywhere.ai"
+  },
+  "author": "PostEverywhere <support@posteverywhere.ai> (https://posteverywhere.ai)",
+  "homepage": "https://github.com/posteverywhere/mcp#readme",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "@types/node": "^22.0.0"
+  }
+}
