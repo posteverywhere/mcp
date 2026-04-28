@@ -1,6 +1,6 @@
 {
   "name": "@posteverywhere/mcp",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "MCP server for PostEverywhere — schedule and publish to Instagram, TikTok, YouTube, LinkedIn, Facebook, X, Threads & Pinterest from Claude Code, Claude Desktop, Cursor, and other MCP-compatible AI clients.",
   "type": "module",
   "bin": {

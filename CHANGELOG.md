@@ -2,6 +2,12 @@
 
 All notable changes to the [PostEverywhere MCP Server](https://www.npmjs.com/package/@posteverywhere/mcp) are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] — 2026-04-28
+
+### Fixed
+- README references to the companion Node.js SDK now correctly point to [`@posteverywhere/sdk`](https://www.npmjs.com/package/@posteverywhere/sdk) (v1.1.1 was published with stale references to the deprecated `posteverywhere` package name)
+- CHANGELOG link to the SDK npm page corrected
+
 ## [1.1.1] — 2026-04-28
 
 ### Added
@@ -34,7 +40,7 @@ All notable changes to the [PostEverywhere MCP Server](https://www.npmjs.com/pac
 
 - 📦 **[npm package](https://www.npmjs.com/package/@posteverywhere/mcp)**
 - 💻 **[GitHub repository](https://github.com/posteverywhere/mcp)**
-- 📦 **[Companion Node.js SDK](https://www.npmjs.com/package/posteverywhere)** for programmatic integrations
+- 📦 **[Companion Node.js SDK](https://www.npmjs.com/package/@posteverywhere/sdk)** for programmatic integrations
 - 📖 **[Full API documentation](https://developers.posteverywhere.ai)**
 - 🌐 **[PostEverywhere homepage](https://posteverywhere.ai)**
 - 🧠 **[Model Context Protocol](https://modelcontextprotocol.io)** — the open standard this server implements
