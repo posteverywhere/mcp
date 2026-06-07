@@ -174,6 +174,18 @@ These all work out of the box once the server is connected:
 
 Each natural-language prompt maps to one or more MCP tool calls — the agent figures out the right sequence.
 
+### X/Twitter research to scheduling
+
+If your MCP client also connects an X/Twitter research source, keep PostEverywhere responsible for scheduling and publishing while the research tool only gathers source material. For example, with [TweetClaw](https://github.com/Xquik-dev/tweetclaw) installed as an OpenClaw plugin, ask:
+
+> "Use TweetClaw to search tweets about our launch topic, summarize the reply themes, draft 3 post options, ask me to approve one, then schedule the approved post with PostEverywhere for tomorrow at 10am on X and LinkedIn."
+
+Keep the handoff explicit:
+
+- TweetClaw gathers X/Twitter context such as tweet search, search tweet replies, follower export, user lookup, media download, monitors, and webhook evidence.
+- PostEverywhere handles connected accounts, media library, scheduling, publishing, retries, and per-platform results.
+- Ask for approval before any publish, update, delete, or retry action.
+
 ## Supported Platforms
 
 All eight platforms work on every plan:
