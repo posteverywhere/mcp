@@ -189,6 +189,24 @@ export class PostEverywhereClient {
     return this.request('POST', '/media/upload', body);
   }
 
+  async uploadMediaFromUrl(body: {
+    url: string;
+    filename?: string;
+  }): Promise<{
+    media_id: string;
+    media_ids: string[];
+    media_status: 'ready';
+    type: 'image';
+    url: string;
+    filename: string;
+    size: number;
+    content_type: string;
+    source_url: string;
+    next_step: string;
+  }> {
+    return this.request('POST', '/media/upload-from-url', body);
+  }
+
   async getMediaStatus(id: string): Promise<{
     id: string;
     type: string;
@@ -215,5 +233,141 @@ export class PostEverywhereClient {
     model?: string;
   }): Promise<{ media_id: string; model: string; aspect_ratio: string; credits_used: number; credits_remaining: number; message: string }> {
     return this.request('POST', '/ai/generate-image', body);
+  }
+
+  async generateCaption(body: {
+    topic: string;
+    platform?: string;
+    tone?: string;
+    length?: string;
+    include_hashtags?: boolean;
+    include_emojis?: boolean;
+    count?: number;
+  }): Promise<{ captions: string[]; platform: string | null; tone: string; length: string; count_requested: number; count_returned: number; credits_used: number; credits_remaining: number }> {
+    return this.request('POST', '/ai/generate-caption', body);
+  }
+
+  // ─── Introspection ─────────────────────────────────────────
+
+  async getMe(): Promise<{
+    api_key: { id: string; key_prefix: string; name: string; scopes: string[]; last_used_at: string; created_at: string; expires_at: string | null } | null;
+    scopes: string[];
+    user: { id: number; email: string; name: string };
+    organization: { id: string; name: string; subscription_plan: string; subscription_status: string; entitled: boolean };
+    workspace: { id: string; name: string };
+    quota: {
+      accounts: { used: number; limit: number };
+      ai_credits: { used: number; limit: number; bonus: number };
+      storage_bytes: { used: number; limit: number };
+      team_seats: { limit: number };
+    };
+    stats: { posts_last_30d: number; total_posts: number };
+  }> {
+    return this.request('GET', '/me');
+  }
+
+  // ─── Analytics ─────────────────────────────────────────────
+
+  async getAnalyticsSummary(params?: { period?: 'today' | 'week' | 'month' | 'all' | 'custom'; from?: string; to?: string }): Promise<any> {
+    const q = new URLSearchParams();
+    if (params?.period) q.set('period', params.period);
+    if (params?.from)   q.set('from', params.from);
+    if (params?.to)     q.set('to', params.to);
+    const qs = q.toString();
+    return this.request('GET', `/analytics/summary${qs ? `?${qs}` : ''}`);
+  }
+
+  // ─── Campaigns ─────────────────────────────────────────────
+
+  async listCampaigns(params?: { status?: 'active' | 'archived'; limit?: number; offset?: number }): Promise<any> {
+    const q = new URLSearchParams();
+    if (params?.status) q.set('status', params.status);
+    if (params?.limit !== undefined)  q.set('limit', String(params.limit));
+    if (params?.offset !== undefined) q.set('offset', String(params.offset));
+    const qs = q.toString();
+    return this.request('GET', `/campaigns${qs ? `?${qs}` : ''}`);
+  }
+  async createCampaign(body: { name: string; description?: string; color?: string; status?: 'active' | 'archived' }): Promise<any> {
+    return this.request('POST', '/campaigns', body);
+  }
+  async getCampaign(id: number): Promise<any> {
+    return this.request('GET', `/campaigns/${id}`);
+  }
+  async updateCampaign(id: number, body: { name?: string; description?: string; color?: string; status?: 'active' | 'archived' }): Promise<any> {
+    return this.request('PATCH', `/campaigns/${id}`, body);
+  }
+  async deleteCampaign(id: number): Promise<any> {
+    return this.request('DELETE', `/campaigns/${id}`);
+  }
+
+  // ─── Bulk Posts ────────────────────────────────────────────
+
+  async bulkCreatePosts(posts: any[]): Promise<{ summary: { total: number; succeeded: number; failed: number }; results: any[] }> {
+    return this.request('POST', '/posts/bulk', { posts });
+  }
+  async retryFailedPosts(filter: {
+    post_ids?: string[];
+    account_id?: number;
+    platform?: string;
+    failed_after?: string;
+    failed_before?: string;
+    max_attempts?: number;
+  }): Promise<{ retried_count: number; destinations: any[]; message: string }> {
+    return this.request('POST', '/posts/retry-failed', filter);
+  }
+
+  // ─── Account Health ────────────────────────────────────────
+
+  async getAccountHealth(id: number): Promise<any> {
+    return this.request('GET', `/accounts/${id}/health`);
+  }
+
+  // ─── Webhooks ──────────────────────────────────────────────
+
+  async listWebhooks(): Promise<{ webhooks: any[] }> {
+    return this.request('GET', '/webhooks');
+  }
+  async createWebhook(body: { url: string; events: string[]; name?: string; description?: string }): Promise<{ id: string; url: string; events: string[]; secret: string; secret_warning: string }> {
+    return this.request('POST', '/webhooks', body);
+  }
+  async getWebhook(id: string): Promise<any> {
+    return this.request('GET', `/webhooks/${id}`);
+  }
+  async updateWebhook(id: string, body: { url?: string; events?: string[]; name?: string; description?: string; is_active?: boolean }): Promise<any> {
+    return this.request('PATCH', `/webhooks/${id}`, body);
+  }
+  async deleteWebhook(id: string): Promise<{ id: string; deleted: boolean }> {
+    return this.request('DELETE', `/webhooks/${id}`);
+  }
+  async testWebhook(id: string): Promise<{ ok: boolean; status: number; duration_ms: number; error: string | null; message: string }> {
+    return this.request('POST', `/webhooks/${id}/test`);
+  }
+
+  // ─── Enhanced listPosts (overload with new filters) ────────
+
+  async listPostsAdvanced(params?: {
+    status?: string;            // comma-separated
+    platform?: string;          // comma-separated
+    account_id?: number;
+    campaign_id?: number;
+    created_after?: string;
+    created_before?: string;
+    scheduled_after?: string;
+    scheduled_before?: string;
+    published_after?: string;
+    published_before?: string;
+    updated_after?: string;
+    search?: string;
+    sort?: 'created_at' | 'scheduled_for' | 'published_at' | 'updated_at';
+    order?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
+  }): Promise<{ posts: Post[]; pagination: { limit: number; offset: number; total: number; has_more: boolean } }> {
+    const q = new URLSearchParams();
+    for (const [k, v] of Object.entries(params || {})) {
+      if (v !== undefined && v !== null) q.set(k, String(v));
+    }
+    const qs = q.toString();
+    return this.request('GET', `/posts${qs ? `?${qs}` : ''}`);
   }
 }
