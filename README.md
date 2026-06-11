@@ -7,7 +7,7 @@
 
 Official [Model Context Protocol](https://modelcontextprotocol.io) server for [PostEverywhere](https://posteverywhere.ai) — let [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), [Claude Desktop](https://claude.ai/download), [Cursor](https://cursor.sh), and other MCP-compatible AI clients **schedule and publish social media posts to Instagram, TikTok, YouTube, LinkedIn, Facebook, X (Twitter), Threads, and Pinterest** using natural language.
 
-> 💡 **Building a programmatic integration?** Use the companion [`posteverywhere`](https://www.npmjs.com/package/posteverywhere) Node.js SDK instead — full TypeScript types, retry handling, error classes.
+> 💡 **Building a programmatic integration?** Use the companion [`@posteverywhere/sdk`](https://www.npmjs.com/package/@posteverywhere/sdk) Node.js SDK instead — full TypeScript types, retry handling, error classes.
 
 ## 🔗 Quick Links
 
@@ -18,7 +18,7 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for [P
 | 📖 **API Documentation** | [developers.posteverywhere.ai](https://developers.posteverywhere.ai) |
 | 📦 **This MCP on npm** | [npmjs.com/package/@posteverywhere/mcp](https://www.npmjs.com/package/@posteverywhere/mcp) |
 | 💻 **This MCP on GitHub** | [github.com/posteverywhere/mcp](https://github.com/posteverywhere/mcp) |
-| 📦 **Node SDK (npm)** | [npmjs.com/package/posteverywhere](https://www.npmjs.com/package/posteverywhere) |
+| 📦 **Node SDK (npm)** | [npmjs.com/package/@posteverywhere/sdk](https://www.npmjs.com/package/@posteverywhere/sdk) |
 | 💻 **Node SDK (GitHub)** | [github.com/posteverywhere/sdk](https://github.com/posteverywhere/sdk) |
 | 🎛️ **Dashboard** | [app.posteverywhere.ai](https://app.posteverywhere.ai) |
 | 🔑 **Get an API key** | [app.posteverywhere.ai/developers](https://app.posteverywhere.ai/developers) |
@@ -143,6 +143,7 @@ Once connected, ask your AI assistant things like:
 ### Media
 - `list_media` — list files in your media library
 - `get_media` — get media file details and processing status
+- `upload_media_from_url` — import an image from any public URL into the library (one call, returns a `media_id` ready for `create_post`)
 - `delete_media` — remove a media file
 
 ### AI
@@ -267,7 +268,7 @@ Hitting a 429? The MCP server returns a clear `rate_limit_exceeded` code with `r
 - 🎛️ [Dashboard (sign in)](https://app.posteverywhere.ai)
 - ✨ [Sign Up — 7-day free trial](https://app.posteverywhere.ai/signup)
 - 🔑 [Get an API key](https://app.posteverywhere.ai/developers)
-- 📦 [Node.js SDK (npm)](https://www.npmjs.com/package/posteverywhere)
+- 📦 [Node.js SDK (npm)](https://www.npmjs.com/package/@posteverywhere/sdk)
 - 💻 [Node.js SDK (GitHub)](https://github.com/posteverywhere/sdk)
 - 📦 [MCP Server (npm — this package)](https://www.npmjs.com/package/@posteverywhere/mcp)
 - 💻 [MCP Server (GitHub — this repo)](https://github.com/posteverywhere/mcp)
@@ -286,7 +287,7 @@ PostEverywhere is the backend for all of these — every plan includes every pla
 
 ## Related
 
-- 📦 **[`posteverywhere`](https://github.com/posteverywhere/sdk)** — Node.js / TypeScript SDK ([npm](https://www.npmjs.com/package/posteverywhere))
+- 📦 **[`@posteverywhere/sdk`](https://github.com/posteverywhere/sdk)** — Node.js / TypeScript SDK ([npm](https://www.npmjs.com/package/@posteverywhere/sdk))
 - 🌐 **[posteverywhere.ai](https://posteverywhere.ai)** — Web dashboard, AI Studio, calendar UI
 - 📚 **[Help Center](https://posteverywhere.ai/support)** — Guides, troubleshooting, FAQ
 - 💵 **[Pricing](https://posteverywhere.ai/pricing)** — From $19/mo, 7-day free trial

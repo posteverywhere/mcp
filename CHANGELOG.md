@@ -10,6 +10,45 @@ All notable changes to the [PostEverywhere MCP Server](https://www.npmjs.com/pac
 ### Fixed
 - `package-lock.json` root package metadata now matches the renamed `@posteverywhere/mcp` package and Node.js 18+ engine requirement
 
+## [1.3.0] — 2026-06-11
+
+### Added — 18 new tools
+
+**Introspection & analytics**
+- **`get_me`** — current API key context, scopes, organization, quota, plan limits.
+- **`get_analytics_summary`** — aggregate counters (today/week/month/custom) for posts, per-platform breakdown, total metrics, AI credit usage.
+
+**Campaigns CRUD**
+- **`list_campaigns`** / **`create_campaign`** / **`get_campaign`** / **`update_campaign`** / **`delete_campaign`** — group related posts under named campaigns, filter posts by `campaign_id`.
+
+**Webhooks (subscribe to events instead of polling)**
+- **`list_webhooks`** / **`create_webhook`** / **`get_webhook`** / **`update_webhook`** / **`delete_webhook`** / **`test_webhook`** — 12 event types (`post.published`, `post.failed`, `account.reconnect_needed`, …) signed with HMAC-SHA256.
+
+**Bulk + power-user tools**
+- **`bulk_create_posts`** — create up to 50 posts in a single API call.
+- **`retry_failed_posts`** — bulk-retry failed destinations by filter (account_id, platform, date range).
+- **`list_posts_advanced`** — full filter set on `GET /v1/posts`: comma-separated status/platform, date ranges, sort/order, search.
+
+**Account + AI**
+- **`get_account_health`** — token expiry, can-post status, recent failure count.
+- **`generate_caption`** — AI captions tuned per-platform (character limits, hashtag conventions, tone, length).
+
+### Changed
+- Underlying `PostEverywhereClient` (`src/client.ts`) extended with corresponding typed methods. Existing tools (`list_accounts`, `list_posts`, `create_post`, etc.) are untouched.
+- See the [PostEverywhere API Changelog](https://developers.posteverywhere.ai/changelog#2026-06-11--major-api-upgrade-introspection-webhooks-campaigns-bulk-ops) for server-side details.
+
+## [1.2.0] — 2026-05-24
+
+### Added
+- **`upload_media_from_url` tool** — import an image from any public URL directly into the PostEverywhere media library, no 3-step REST dance required. Server fetches the bytes, stores on Cloudflare Images, and returns a `media_id` ready to attach to `create_post`. Supports JPEG, PNG, GIF, WebP, HEIC, HEIF up to 25 MB.
+
+### Changed
+- `create_post.media_ids` description corrected — previously referenced a non-existent `upload_media` tool. Now points to `upload_media_from_url` (recommended) or `generate_image`; existing library files can be found with `list_media`.
+- `update_post.media_ids` description updated to match.
+
+### Notes
+- Video URLs are not supported by `upload_media_from_url` yet — they still need the 3-step REST flow (`POST /v1/media/upload` → `PUT` presigned URL → `POST /v1/media/{id}/complete`). The tool will return a 415 with a clear hint if you pass a video URL.
+
 ## [1.1.2] — 2026-04-28
 
 ### Fixed
