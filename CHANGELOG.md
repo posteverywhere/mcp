@@ -2,6 +2,14 @@
 
 All notable changes to the [PostEverywhere MCP Server](https://www.npmjs.com/package/@posteverywhere/mcp) are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Optional X/Twitter research-to-scheduling handoff example for using TweetClaw as a source tool while keeping PostEverywhere responsible for scheduling and publishing
+
+### Fixed
+- `package-lock.json` root package metadata now matches the renamed `@posteverywhere/mcp` package and Node.js 18+ engine requirement
+
 ## [1.3.0] — 2026-06-11
 
 ### Added — 18 new tools
@@ -27,7 +35,7 @@ All notable changes to the [PostEverywhere MCP Server](https://www.npmjs.com/pac
 
 ### Changed
 - Underlying `PostEverywhereClient` (`src/client.ts`) extended with corresponding typed methods. Existing tools (`list_accounts`, `list_posts`, `create_post`, etc.) are untouched.
-- See the [PostEverywhere API Changelog](https://docs.posteverywhere.ai/changelog#2026-06-11--major-api-upgrade-introspection-webhooks-campaigns-bulk-ops) for server-side details.
+- See the [PostEverywhere API Changelog](https://developers.posteverywhere.ai/changelog#2026-06-11--major-api-upgrade-introspection-webhooks-campaigns-bulk-ops) for server-side details.
 
 ## [1.2.0] — 2026-05-24
 
