@@ -74,22 +74,42 @@ export function registerTools(server: McpServer, client: PostEverywhereClient) {
 
   server.tool(
     'create_post',
-    'Create and schedule a social media post on PostEverywhere. Specify the content text, which social accounts to post to (by account ID), and optionally when to schedule it. If no scheduled_for is provided, the post is published immediately. Supports platform-specific content overrides and media attachments. Returns the post ID and scheduling confirmation.',
+    'Create a social media post on PostEverywhere. Three modes: (1) PUBLISH NOW — give content + account_ids, omit scheduled_for; (2) SCHEDULE — add scheduled_for; (3) DRAFT for human review — set draft: true, which saves the post WITHOUT publishing it (it appears in the user\'s PostEverywhere app and via list_posts(status:"draft"); you then publish it with schedule_post once approved). Use draft mode whenever a human wants to check posts before they go live. Supports per-platform overrides and media. Returns the post ID, its status, and the next step to take.',
     {
       content: z.string().describe('The text content of the post'),
-      account_ids: z.array(z.number()).min(1).describe('Array of social account IDs to post to (get these from list_accounts)'),
-      scheduled_for: z.string().optional().describe('ISO 8601 datetime to schedule the post (e.g., 2026-03-15T14:00:00Z). Omit to publish immediately.'),
+      account_ids: z.array(z.number()).optional().describe('Social account IDs to post to (from list_accounts). REQUIRED to publish or schedule; OPTIONAL for a draft (accounts can be chosen later when you call schedule_post).'),
+      scheduled_for: z.string().optional().describe('ISO 8601 datetime to schedule the post (e.g., 2026-03-15T14:00:00Z). Omit to publish immediately. When draft:true this is optional and just pre-fills the draft\'s suggested time.'),
       timezone: z.string().optional().default('UTC').describe('IANA timezone for scheduling (e.g., America/New_York)'),
       media_ids: z.array(z.string()).optional().describe('Array of media UUIDs to attach. Get these from upload_media_from_url (recommended) or generate_image. Existing library files can be looked up with list_media.'),
+      draft: z.boolean().optional().describe('Set true to save as a DRAFT for human review instead of publishing or scheduling. The draft is NOT published until you call schedule_post on it. Review drafts with list_posts(status:"draft") or get_post.'),
     },
-    async ({ content, account_ids, scheduled_for, timezone, media_ids }) => {
+    async ({ content, account_ids, scheduled_for, timezone, media_ids, draft }) => {
       const result = await client.createPost({
         content,
         account_ids,
         scheduled_for,
         timezone,
         media_ids,
+        draft,
       });
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
+  server.tool(
+    'schedule_post',
+    'Publish or schedule a DRAFT (created with create_post(draft: true)). Pass scheduled_for to schedule it for a future time, or publish_now: true to publish it right away. Optionally pass account_ids to set/override which accounts it posts to (defaults to the accounts saved on the draft). This is the final step of the review workflow: create_post(draft:true) → review with list_posts(status:"draft")/get_post → schedule_post. Only works on drafts — to re-time an already-scheduled post, use update_post.',
+    {
+      post_id: z.string().uuid().describe('The UUID of the draft to publish (from create_post or list_posts)'),
+      scheduled_for: z.string().optional().describe('ISO 8601 datetime to schedule for (e.g., 2026-06-20T14:00:00Z). Provide this OR publish_now.'),
+      publish_now: z.boolean().optional().describe('Set true to publish the draft immediately instead of scheduling it.'),
+      account_ids: z.array(z.number()).optional().describe('Optional: accounts to publish to, overriding the draft\'s saved targets.'),
+      timezone: z.string().optional().describe('IANA timezone for display (does not change when the post fires).'),
+    },
+    async ({ post_id, scheduled_for, publish_now, account_ids, timezone }) => {
+      const result = await client.schedulePost(post_id, { scheduled_for, publish_now, account_ids, timezone });
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
       };

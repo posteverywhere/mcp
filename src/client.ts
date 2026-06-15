@@ -89,6 +89,10 @@ export class PostEverywhereClient {
       method,
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
+        // Identifies MCP traffic to the v1 logger (→ PostHog client_tool='mcp').
+        // Not a secret; lets us track MCP usage without touching this
+        // zero-secret container's security model. Keep in step with package version.
+        'User-Agent': 'posteverywhere-mcp/1.4.0',
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -131,13 +135,24 @@ export class PostEverywhereClient {
 
   async createPost(body: {
     content: string;
-    account_ids: number[];
+    account_ids?: number[];
     scheduled_for?: string;
     timezone?: string;
     media_ids?: string[];
     platform_content?: Record<string, unknown>;
-  }): Promise<{ post_id: string; status: string; scheduled_for: string | null; accounts_count: number; message: string }> {
+    draft?: boolean;
+  }): Promise<{ post_id: string; status: string; scheduled_for: string | null; accounts_count?: number; message: string; next_steps?: Record<string, string> }> {
     return this.request('POST', '/posts', body);
+  }
+
+  /** Publish or schedule a draft (created with createPost({ draft: true })). */
+  async schedulePost(id: string, body: {
+    scheduled_for?: string;
+    publish_now?: boolean;
+    account_ids?: number[];
+    timezone?: string;
+  }): Promise<{ post_id: string; status: string; scheduled_for: string; publish_now: boolean; destinations: Array<{ account_id: number; platform: string; status: string }>; message: string }> {
+    return this.request('POST', `/posts/${id}/schedule`, body);
   }
 
   async updatePost(id: string, body: {

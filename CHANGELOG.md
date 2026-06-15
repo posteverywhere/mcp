@@ -2,6 +2,21 @@
 
 All notable changes to the [PostEverywhere MCP Server](https://www.npmjs.com/package/@posteverywhere/mcp) are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] — 2026-06-14
+
+### Added — draft workflow (human-in-the-loop)
+
+- **`create_post` now supports `draft: true`** — save a post as a **draft** for human review instead of publishing or scheduling it. `account_ids` is optional for drafts (choose them later).
+- **New `schedule_post` tool** — publish or schedule a draft created with `create_post(draft: true)`: pass `scheduled_for` (ISO 8601 UTC) to schedule, or `publish_now: true` to publish immediately. Optionally override `account_ids`.
+- **`list_posts(status: "draft")` and `get_post`** now return a draft's target accounts and per-platform content, so an agent can review a draft before publishing.
+
+Together these enable the review loop: `create_post(draft: true)` → `list_posts(status: "draft")` / `get_post` → `schedule_post`.
+
+### Changed
+
+- Docs now reflect **ChatGPT** (via the hosted connector) and **OpenAI Codex** as supported MCP clients, alongside Claude Code, Claude Desktop, and Cursor.
+- `User-Agent` bumped to `posteverywhere-mcp/1.4.0`.
+
 ## [1.3.0] — 2026-06-11
 
 ### Added — 18 new tools

@@ -1,11 +1,11 @@
-# @posteverywhere/mcp — Social Media MCP Server for Claude, Cursor & AI Agents
+# @posteverywhere/mcp — Social Media MCP Server for Claude, ChatGPT, Cursor, Codex & AI Agents
 
 [![npm version](https://img.shields.io/npm/v/@posteverywhere/mcp.svg?style=flat-square)](https://www.npmjs.com/package/@posteverywhere/mcp)
 [![npm downloads](https://img.shields.io/npm/dw/@posteverywhere/mcp.svg?style=flat-square)](https://www.npmjs.com/package/@posteverywhere/mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/posteverywhere/mcp?style=flat-square)](https://github.com/posteverywhere/mcp)
 
-Official [Model Context Protocol](https://modelcontextprotocol.io) server for [PostEverywhere](https://posteverywhere.ai) — let [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), [Claude Desktop](https://claude.ai/download), [Cursor](https://cursor.sh), and other MCP-compatible AI clients **schedule and publish social media posts to Instagram, TikTok, YouTube, LinkedIn, Facebook, X (Twitter), Threads, and Pinterest** using natural language.
+Official [Model Context Protocol](https://modelcontextprotocol.io) server for [PostEverywhere](https://posteverywhere.ai) — let [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), [Claude Desktop](https://claude.ai/download), [ChatGPT](https://chatgpt.com) (via the [hosted connector](https://posteverywhere.ai/agents)), [Cursor](https://cursor.sh), [OpenAI Codex](https://openai.com/codex/), and other MCP-compatible AI clients **schedule and publish social media posts to Instagram, TikTok, YouTube, LinkedIn, Facebook, X (Twitter), Threads, and Pinterest** using natural language.
 
 > 💡 **Building a programmatic integration?** Use the companion [`@posteverywhere/sdk`](https://www.npmjs.com/package/@posteverywhere/sdk) Node.js SDK instead — full TypeScript types, retry handling, error classes.
 
@@ -132,13 +132,21 @@ Once connected, ask your AI assistant things like:
 - `get_account` — get details for a specific account (token expiry, can-post status)
 
 ### Posts
-- `list_posts` — list posts filtered by status (`scheduled`, `published`, `failed`, `draft`) or platform
-- `get_post` — get full details for a single post including all destinations
-- `create_post` — create and schedule a post to one, several, or all connected accounts
+- `list_posts` — list posts filtered by status (`scheduled`, `published`, `failed`, `draft`) or platform. Drafts include their target accounts + per-platform content so you can review them before publishing.
+- `get_post` — get full details for a single post including all destinations (for drafts, the saved accounts + per-platform content)
+- `create_post` — publish now, schedule for later, **or save as a draft for human review** (`draft: true`)
+- `schedule_post` — publish or schedule a **draft** (the approval step — pass `scheduled_for`, or `publish_now: true`)
 - `update_post` — modify a scheduled or draft post (content, schedule time, accounts)
 - `delete_post` — delete a scheduled or draft post
 - `get_post_results` — per-platform publishing results, errors, and live URLs
 - `retry_failed_post` — retry every failed destination of a post
+
+> **🧑‍💼 Human-in-the-loop drafts** — let the agent draft posts for you to approve before anything goes live:
+> 1. *"Draft a LinkedIn post about our launch — don't publish it yet"* → `create_post(draft: true)`
+> 2. *"Show me my drafts"* → `list_posts(status: "draft")` / `get_post`
+> 3. *"Looks good — schedule it for Tuesday 9am"* → `schedule_post(scheduled_for: …)` (or *"publish it now"* → `publish_now: true`)
+>
+> Drafts are saved in your PostEverywhere account and **never publish until you schedule them** — review them in the app or via the agent.
 
 ### Media
 - `list_media` — list files in your media library
