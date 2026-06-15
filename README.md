@@ -4,6 +4,7 @@
 [![npm downloads](https://img.shields.io/npm/dw/@posteverywhere/mcp.svg?style=flat-square)](https://www.npmjs.com/package/@posteverywhere/mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/posteverywhere/mcp?style=flat-square)](https://github.com/posteverywhere/mcp)
+[![Glama quality score](https://glama.ai/mcp/servers/posteverywhere/mcp/badges/score.svg)](https://glama.ai/mcp/servers/posteverywhere/mcp)
 
 Official [Model Context Protocol](https://modelcontextprotocol.io) server for [PostEverywhere](https://posteverywhere.ai) — let [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), [Claude Desktop](https://claude.ai/download), [ChatGPT](https://chatgpt.com) (via the [hosted connector](https://posteverywhere.ai/agents)), [Cursor](https://cursor.sh), [OpenAI Codex](https://openai.com/codex/), and other MCP-compatible AI clients **schedule and publish social media posts to Instagram, TikTok, YouTube, LinkedIn, Facebook, X (Twitter), Threads, and Pinterest** using natural language.
 
