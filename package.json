@@ -1,6 +1,6 @@
 {
   "name": "@posteverywhere/mcp",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "MCP server for PostEverywhere — schedule and publish to Instagram, TikTok, YouTube, LinkedIn, Facebook, X, Threads & Pinterest from Claude, ChatGPT, Cursor, OpenAI Codex, and other MCP-compatible AI clients.",
   "type": "module",
   "bin": {

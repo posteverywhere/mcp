@@ -92,7 +92,7 @@ export class PostEverywhereClient {
         // Identifies MCP traffic to the v1 logger (→ PostHog client_tool='mcp').
         // Not a secret; lets us track MCP usage without touching this
         // zero-secret container's security model. Keep in step with package version.
-        'User-Agent': 'posteverywhere-mcp/1.4.0',
+        'User-Agent': 'posteverywhere-mcp/1.4.1',
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,

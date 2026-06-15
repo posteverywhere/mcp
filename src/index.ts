@@ -23,8 +23,16 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { readFileSync } from 'node:fs';
 import { PostEverywhereClient } from './client.js';
 import { registerTools } from './tools.js';
+
+// Advertise the real package version (read from package.json) so inspectors,
+// Glama, and the MCP registry see an accurate, bumpable version — never a
+// stale hardcoded constant.
+const pkg = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8'),
+) as { version: string };
 
 const apiKey = process.env.POSTEVERYWHERE_API_KEY;
 if (!apiKey) {
@@ -39,12 +47,17 @@ if (!apiKey.startsWith('pe_live_')) {
   process.exit(1);
 }
 
-const baseUrl = process.env.POSTEVERYWHERE_API_URL || 'https://app.posteverywhere.ai';
+// Accept POSTEVERYWHERE_BASE_URL (documented / Glama schema) or the legacy
+// POSTEVERYWHERE_API_URL alias; default to production.
+const baseUrl =
+  process.env.POSTEVERYWHERE_BASE_URL ||
+  process.env.POSTEVERYWHERE_API_URL ||
+  'https://app.posteverywhere.ai';
 
 const client = new PostEverywhereClient({ baseUrl, apiKey });
 const server = new McpServer({
   name: 'posteverywhere',
-  version: '0.1.0',
+  version: pkg.version,
 });
 
 registerTools(server, client);

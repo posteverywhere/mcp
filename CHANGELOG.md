@@ -2,6 +2,17 @@
 
 All notable changes to the [PostEverywhere MCP Server](https://www.npmjs.com/package/@posteverywhere/mcp) are documented in this file. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] — 2026-06-15
+
+### Fixed
+
+- **Server now advertises its real version** (read from `package.json`) instead of a hardcoded `0.1.0`. Corrects the version shown in MCP inspectors and lets directories (Glama, the official MCP registry) detect new releases and re-index the full 33-tool set.
+- **`POSTEVERYWHERE_BASE_URL` is now honored** (alongside the legacy `POSTEVERYWHERE_API_URL` alias) for overriding the API base URL — matching the documented environment variable.
+
+### Changed
+
+- `User-Agent` bumped to `posteverywhere-mcp/1.4.1`.
+
 ## [1.4.0] — 2026-06-14
 
 ### Added — draft workflow (human-in-the-loop)
