@@ -10,7 +10,18 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { PostEverywhereClient } from './client.js';
 
-export function registerTools(server: McpServer, client: PostEverywhereClient) {
+export interface RegisterToolsOptions {
+  /**
+   * Hide the generate_image tool. AI image generation is an unsupported use
+   * case for the Anthropic Connectors Directory, so the hosted /claude
+   * endpoint sets this; every other surface keeps the full toolset.
+   * Defaults to the MCP_DISABLE_IMAGE_GENERATION env var.
+   */
+  disableImageGeneration?: boolean;
+}
+
+export function registerTools(server: McpServer, client: PostEverywhereClient, opts?: RegisterToolsOptions) {
+  const hideImageGeneration = opts?.disableImageGeneration ?? (process.env.MCP_DISABLE_IMAGE_GENERATION === '1');
 
   // ─── Accounts ──────────────────────────────────────────────
 
@@ -311,7 +322,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient) {
   // Connectors Directory (rejection criterion). The hosted connector sets
   // MCP_DISABLE_IMAGE_GENERATION=1 to drop this tool from its listing;
   // stdio/npm installs and the v1 API keep it unless they opt out too.
-  if (process.env.MCP_DISABLE_IMAGE_GENERATION !== '1') {
+  if (!hideImageGeneration) {
     server.registerTool(
       'generate_image',
       {
