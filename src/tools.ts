@@ -307,25 +307,31 @@ export function registerTools(server: McpServer, client: PostEverywhereClient) {
 
   // ─── AI ───────────────────────────────────────────────────
 
-  server.registerTool(
-    'generate_image',
-    {
-      title: 'Generate AI Image',
-      description: 'Generate an AI image from a text prompt on PostEverywhere. The image is saved to your media library and can be attached to posts via media_ids. Choose from 4 models: gemini-3-pro (default, balanced quality, 5 credits), nano-banana-pro (photorealism, 15 credits), ideogram-v2 (best for text-in-image, 8 credits), flux-schnell (fastest, 1 credit). Requires the "ai" scope on your API key.',
-      inputSchema: {
-      prompt: z.string().max(2000).describe('Text description of the image to generate'),
-      aspect_ratio: z.enum(['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4']).optional().default('1:1').describe('Aspect ratio for the generated image'),
-      model: z.enum(['nano-banana-pro', 'ideogram-v2', 'gemini-3-pro', 'flux-schnell']).optional().default('gemini-3-pro').describe('AI model to use for generation'),
-    },
-      annotations: { readOnlyHint: false, destructiveHint: false },
-    },
-    async ({ prompt, aspect_ratio, model }) => {
-      const result = await client.generateImage({ prompt, aspect_ratio, model });
-      return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
-      };
-    }
-  );
+  // AI image generation is an unsupported use case for the Anthropic
+  // Connectors Directory (rejection criterion). The hosted connector sets
+  // MCP_DISABLE_IMAGE_GENERATION=1 to drop this tool from its listing;
+  // stdio/npm installs and the v1 API keep it unless they opt out too.
+  if (process.env.MCP_DISABLE_IMAGE_GENERATION !== '1') {
+    server.registerTool(
+      'generate_image',
+      {
+        title: 'Generate AI Image',
+        description: 'Generate an AI image from a text prompt on PostEverywhere. The image is saved to your media library and can be attached to posts via media_ids. Choose from 4 models: gemini-3-pro (default, balanced quality, 5 credits), nano-banana-pro (photorealism, 15 credits), ideogram-v2 (best for text-in-image, 8 credits), flux-schnell (fastest, 1 credit). Requires the "ai" scope on your API key.',
+        inputSchema: {
+        prompt: z.string().max(2000).describe('Text description of the image to generate'),
+        aspect_ratio: z.enum(['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4']).optional().default('1:1').describe('Aspect ratio for the generated image'),
+        model: z.enum(['nano-banana-pro', 'ideogram-v2', 'gemini-3-pro', 'flux-schnell']).optional().default('gemini-3-pro').describe('AI model to use for generation'),
+      },
+        annotations: { readOnlyHint: false, destructiveHint: false },
+      },
+      async ({ prompt, aspect_ratio, model }) => {
+        const result = await client.generateImage({ prompt, aspect_ratio, model });
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        };
+      }
+    );
+  }
 
   server.registerTool(
     'generate_caption',
