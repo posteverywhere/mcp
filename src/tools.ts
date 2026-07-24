@@ -31,7 +31,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'List Accounts',
       description: 'List all connected social media accounts on PostEverywhere. Returns account IDs, platform names, usernames, and health status (whether each account can currently post). Use this to see which platforms are available before creating a post.',
       inputSchema: {},
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async () => {
       const result = await client.listAccounts();
@@ -49,7 +49,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       account_id: z.number().describe('The numeric ID of the social account to retrieve'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ account_id }) => {
       const result = await client.getAccount(account_id);
@@ -71,7 +71,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       platform: z.string().optional().describe('Filter by platform (e.g., instagram, linkedin, x)'),
       limit: z.number().min(1).max(100).optional().default(20).describe('Number of posts to return'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ status, platform, limit }) => {
       const result = await client.listPosts({ status, platform, limit });
@@ -89,7 +89,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post to retrieve'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ post_id }) => {
       const result = await client.getPost(post_id);
@@ -113,7 +113,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       draft: z.boolean().optional().describe('Set true to save as a DRAFT for human review instead of publishing or scheduling. The draft is NOT published until you call schedule_post on it. Review drafts with list_posts(status:"draft") or get_post.'),
       platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name (e.g. {"instagram": {...}}). Each entry may set "content" (platform-specific caption) and "contentType" (the post format for that platform). contentType values: Instagram "Post" | "Reels" | "Story" | "Trial Reel"; Facebook "Post" | "Reels" | "Story"; YouTube "Video" | "Short". Omit contentType to use the platform default (video media defaults to Reels on Instagram).'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async ({ content, account_ids, scheduled_for, timezone, media_ids, draft, platform_content }) => {
       const result = await client.createPost({
@@ -143,7 +143,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       account_ids: z.array(z.number()).optional().describe('Optional: accounts to publish to, overriding the draft\'s saved targets.'),
       timezone: z.string().optional().describe('IANA timezone for display (does not change when the post fires).'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async ({ post_id, scheduled_for, publish_now, account_ids, timezone }) => {
       const result = await client.schedulePost(post_id, { scheduled_for, publish_now, account_ids, timezone });
@@ -166,7 +166,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       account_ids: z.array(z.number()).optional().describe('New array of social account IDs to post to'),
       media_ids: z.array(z.string()).optional().describe('New array of media UUIDs to attach. Get these from upload_media_from_url or generate_image.'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
     },
     async ({ post_id, content, scheduled_for, timezone, account_ids, media_ids }) => {
       const result = await client.updatePost(post_id, {
@@ -190,7 +190,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post to delete'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     },
     async ({ post_id }) => {
       const result = await client.deletePost(post_id);
@@ -210,7 +210,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post to get results for'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ post_id }) => {
       const result = await client.getPostResults(post_id);
@@ -230,7 +230,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post with failed destinations'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async ({ post_id }) => {
       const result = await client.retryPost(post_id);
@@ -251,7 +251,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       type: z.enum(['image', 'video', 'document']).optional().describe('Filter by media type'),
       limit: z.number().min(1).max(100).optional().default(20).describe('Number of items to return'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ type, limit }) => {
       const result = await client.listMedia({ type, limit });
@@ -269,7 +269,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       media_id: z.string().uuid().describe('The UUID of the media file to retrieve'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ media_id }) => {
       const result = await client.getMediaStatus(media_id);
@@ -287,7 +287,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       media_id: z.string().uuid().describe('The UUID of the media file to delete'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     },
     async ({ media_id }) => {
       const result = await client.deleteMedia(media_id);
@@ -306,7 +306,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       url: z.string().url().describe('Public HTTPS URL pointing to the image. Must be reachable from the public internet (no private/loopback addresses).'),
       filename: z.string().optional().describe('Optional filename to record in the library. If omitted, derived from the URL path.'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async ({ url, filename }) => {
       const result = await client.uploadMediaFromUrl({ url, filename });
@@ -333,7 +333,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
         aspect_ratio: z.enum(['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4']).optional().default('1:1').describe('Aspect ratio for the generated image'),
         model: z.enum(['nano-banana-pro', 'ideogram-v2', 'gemini-3-pro', 'flux-schnell']).optional().default('gemini-3-pro').describe('AI model to use for generation'),
       },
-        annotations: { readOnlyHint: false, destructiveHint: false },
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       },
       async ({ prompt, aspect_ratio, model }) => {
         const result = await client.generateImage({ prompt, aspect_ratio, model });
@@ -358,7 +358,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       include_emojis: z.boolean().optional().default(true).describe('Whether to include emojis'),
       count: z.number().min(1).max(5).optional().default(1).describe('Number of caption variants to return (1-5)'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
       const result = await client.generateCaption(args);
@@ -374,7 +374,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Get Workspace Info',
       description: "Get the current API key context on PostEverywhere — who you are, what scopes your key has, what plan the organization is on, and what's remaining on each quota (accounts/AI credits/storage). Use this as the FIRST CALL when initializing an MCP session to self-discover the organization_id, scopes, and quota state.",
       inputSchema: {},
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async () => {
       const result = await client.getMe();
@@ -394,7 +394,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       from: z.string().optional().describe('ISO timestamp lower bound (required if period=custom)'),
       to: z.string().optional().describe('ISO timestamp upper bound (required if period=custom)'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
       const result = await client.getAnalyticsSummary(args);
@@ -414,7 +414,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       limit: z.number().min(1).max(100).optional().default(50).describe('Page size'),
       offset: z.number().min(0).optional().default(0).describe('Pagination offset'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
       const result = await client.listCampaigns(args);
@@ -433,7 +433,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe('Hex color like #3b82f6'),
       status: z.enum(['active','archived']).optional().default('active'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
       const result = await client.createCampaign(args);
@@ -447,7 +447,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Get Campaign',
       description: 'Get details of a single campaign on PostEverywhere by its id, including post_count.',
       inputSchema: { id: z.number().describe('Campaign id') },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ id }) => {
       const result = await client.getCampaign(id);
@@ -467,7 +467,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
       status: z.enum(['active','archived']).optional(),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     },
     async ({ id, ...body }) => {
       const result = await client.updateCampaign(id, body);
@@ -481,7 +481,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Delete Campaign',
       description: 'Delete a campaign on PostEverywhere. Posts in the campaign survive — their campaign_id is set to NULL.',
       inputSchema: { id: z.number().describe('Campaign id') },
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     },
     async ({ id }) => {
       const result = await client.deleteCampaign(id);
@@ -499,7 +499,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       posts: z.array(z.any()).min(1).max(50).describe('Array of post objects (same shape as create_post body). Max 50.'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async ({ posts }) => {
       const result = await client.bulkCreatePosts(posts);
@@ -520,7 +520,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       failed_before: z.string().optional().describe('ISO timestamp — only retry failures before this'),
       max_attempts: z.number().min(1).max(10).optional().describe('Skip destinations with attempt_count >= this'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async (args) => {
       const result = await client.retryFailedPosts(args);
@@ -536,7 +536,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Get Account Health',
       description: 'Check the health of a connected social account on PostEverywhere. Returns status (healthy|warning|broken), can_post boolean, token expiry, needs_reconnection flag, recent failure count, last successful publish. Use this before publishing to detect a dead token BEFORE it causes a failed post.',
       inputSchema: { id: z.number().describe('Social account id') },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ id }) => {
       const result = await client.getAccountHealth(id);
@@ -552,7 +552,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'List Webhooks',
       description: 'List all webhook subscriptions on PostEverywhere for the current organization. Returns id, url, subscribed events, is_active, recent delivery stats. Note: the signing secret is NEVER included in list responses.',
       inputSchema: {},
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async () => {
       const result = await client.listWebhooks();
@@ -571,7 +571,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       name: z.string().max(100).optional().describe('Human-readable name for the subscription'),
       description: z.string().max(500).optional(),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
       const result = await client.createWebhook(args);
@@ -585,7 +585,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Get Webhook',
       description: 'Get details of a single webhook subscription on PostEverywhere (does NOT include the signing secret).',
       inputSchema: { id: z.string().uuid().describe('Webhook id') },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async ({ id }) => {
       const result = await client.getWebhook(id);
@@ -606,7 +606,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       description: z.string().max(500).optional(),
       is_active: z.boolean().optional(),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     },
     async ({ id, ...body }) => {
       const result = await client.updateWebhook(id, body);
@@ -620,7 +620,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Delete Webhook',
       description: 'Delete a webhook subscription on PostEverywhere. Cascades to delete the delivery history.',
       inputSchema: { id: z.string().uuid() },
-      annotations: { readOnlyHint: false, destructiveHint: true },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
     },
     async ({ id }) => {
       const result = await client.deleteWebhook(id);
@@ -634,7 +634,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Test Webhook',
       description: 'Send a synthetic test ping to a webhook URL on PostEverywhere so you can verify your endpoint receives the request and validates the HMAC signature. Returns the receiver\'s HTTP status + duration.',
       inputSchema: { id: z.string().uuid() },
-      annotations: { readOnlyHint: false, destructiveHint: false },
+      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
     },
     async ({ id }) => {
       const result = await client.testWebhook(id);
@@ -667,7 +667,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       limit: z.number().min(1).max(100).optional().default(20),
       offset: z.number().min(0).optional().default(0),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false },
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     },
     async (args) => {
       const result = await client.listPostsAdvanced(args);
