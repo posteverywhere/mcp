@@ -1,7 +1,8 @@
 {
   "name": "@posteverywhere/mcp",
-  "version": "1.4.1",
-  "description": "MCP server for PostEverywhere — schedule and publish to Instagram, TikTok, YouTube, LinkedIn, Facebook, X, Threads & Pinterest from Claude, ChatGPT, Cursor, OpenAI Codex, and other MCP-compatible AI clients.",
+  "mcpName": "ai.posteverywhere/mcp",
+  "version": "1.5.0",
+  "description": "MCP server for PostEverywhere \u2014 schedule and publish to Instagram, TikTok, YouTube, LinkedIn, Facebook, X, Threads & Pinterest from Claude, ChatGPT, Cursor, OpenAI Codex, and other MCP-compatible AI clients.",
   "type": "module",
   "bin": {
     "posteverywhere-mcp": "dist/index.js"
