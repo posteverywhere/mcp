@@ -7,24 +7,6 @@
     "source": "github"
   },
   "version": "1.7.0",
-  "packages": [
-    {
-      "registryType": "npm",
-      "identifier": "@posteverywhere/mcp",
-      "version": "1.7.0",
-      "transport": {
-        "type": "stdio"
-      },
-      "environmentVariables": [
-        {
-          "name": "POSTEVERYWHERE_API_KEY",
-          "description": "PostEverywhere API key (create at app.posteverywhere.ai under Settings, Developers)",
-          "isRequired": true,
-          "isSecret": true
-        }
-      ]
-    }
-  ],
   "remotes": [
     {
       "type": "streamable-http",
