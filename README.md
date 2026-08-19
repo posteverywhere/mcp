@@ -1,5 +1,7 @@
 # @posteverywhere/mcp — Social Media MCP Server for Claude, ChatGPT, Cursor, Codex & AI Agents
 
+mcp-name: io.github.posteverywhere/mcp
+
 [![npm version](https://img.shields.io/npm/v/@posteverywhere/mcp.svg?style=flat-square)](https://www.npmjs.com/package/@posteverywhere/mcp)
 [![npm downloads](https://img.shields.io/npm/dw/@posteverywhere/mcp.svg?style=flat-square)](https://www.npmjs.com/package/@posteverywhere/mcp)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg?style=flat-square)](LICENSE)
