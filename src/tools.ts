@@ -23,6 +23,31 @@ export interface RegisterToolsOptions {
 export function registerTools(server: McpServer, client: PostEverywhereClient, opts?: RegisterToolsOptions) {
   const hideImageGeneration = opts?.disableImageGeneration ?? (process.env.MCP_DISABLE_IMAGE_GENERATION === '1');
 
+  // ─── Posting queue ─────────────────────────────────────────
+
+  server.registerTool(
+    'get_queue',
+    {
+      title: 'Get Posting Queue',
+      description: 'Show the workspace posting queue: the recurring weekly slots it posts at, and the next openings coming up. Use this before create_post(use_queue: true) so you can tell the user exactly when their post will go out, and use it when they ask "when is my next slot" or "what does my schedule look like". The upcoming list is a FORECAST, not a reservation: a slot is only taken when a post is actually created with use_queue. If no queue is set up the queue field is null and the message explains where to create one.',
+      inputSchema: {
+        preview: z.number().optional().describe('How many upcoming openings to return (1-30, default 10).'),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ preview }) => {
+      const result = await client.getQueue({ preview });
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
   // ─── Accounts ──────────────────────────────────────────────
 
   server.registerTool(
@@ -31,7 +56,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'List Accounts',
       description: 'List all connected social media accounts on PostEverywhere. Returns account IDs, platform names, usernames, and health status (whether each account can currently post). Use this to see which platforms are available before creating a post.',
       inputSchema: {},
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async () => {
       const result = await client.listAccounts();
@@ -49,7 +79,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       account_id: z.number().describe('The numeric ID of the social account to retrieve'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ account_id }) => {
       const result = await client.getAccount(account_id);
@@ -71,7 +106,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       platform: z.string().optional().describe('Filter by platform (e.g., instagram, linkedin, x)'),
       limit: z.number().min(1).max(100).optional().default(20).describe('Number of posts to return'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ status, platform, limit }) => {
       const result = await client.listPosts({ status, platform, limit });
@@ -89,7 +129,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post to retrieve'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ post_id }) => {
       const result = await client.getPost(post_id);
@@ -111,11 +156,17 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       timezone: z.string().optional().default('UTC').describe('IANA timezone for scheduling (e.g., America/New_York)'),
       media_ids: z.array(z.string()).optional().describe('Array of media UUIDs to attach. Get these from upload_media_from_url (recommended) or generate_image. Existing library files can be looked up with list_media.'),
       draft: z.boolean().optional().describe('Set true to save as a DRAFT for human review instead of publishing or scheduling. The draft is NOT published until you call schedule_post on it. Review drafts with list_posts(status:"draft") or get_post.'),
-      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name (e.g. {"instagram": {...}}). Each entry may set "content" (platform-specific caption) and "contentType" (the post format for that platform). contentType values: Instagram "Post" | "Reels" | "Story" | "Trial Reel"; Facebook "Post" | "Reels" | "Story"; YouTube "Video" | "Short". Omit contentType to use the platform default (video media defaults to Reels on Instagram).'),
+      use_queue: z.boolean().optional().describe('Set true to let the workspace posting queue choose the time: the next free slot is allocated at create time. Use this instead of scheduled_for when the user says "add it to the queue", "post it at my usual times", or "whenever is next free". Mutually exclusive with scheduled_for - sending both is rejected. Call get_queue first if you want to tell the user WHICH slot they will get.'),
+      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name (e.g. {"instagram": {...}}). Each entry may set "content" (platform-specific caption) and "contentType" (the post format for that platform). contentType values: Instagram "Post" | "Reels" | "Story" | "Trial Reel"; Facebook "Post" | "Reels" | "Story"; YouTube "Video" | "Short". Omit contentType to use the platform default (video media defaults to Reels on Instagram). Each entry may also set "settings" with platform-specific options, e.g. Pinterest {"settings": {"boardId": "...", "link": "https://...", "title": "..."}} to pick the board and destination link, YouTube {"settings": {"title": "..."}}. X: {"x": {"settings": {"made_with_ai": true, "paid_partnership": true, "community_id": "<numeric X Community id>"}}} adds X\'s disclosure labels or posts into a Community the account belongs to. X ARTICLE (long-form, X Premium accounts only): {"x": {"content": "<body: # headings, - lists, > quotes, **bold**, *italic*, [links](https://...)>", "settings": {"post_type": "article", "title": "<max 100 chars>"}}} with ONLY X account ids, up to 5 images in media_ids (the first is the cover, 2000x800 looks best; place others inline with a line ![caption](image:2), or they go at the end), no video, body up to 25,000 characters. The body also supports --- dividers, ```code``` blocks, | tables |, a line that is just an X post link (embeds it) and ![caption](https://image-url). Limited to 2 published articles per X account per 24 hours.'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
-    async ({ content, account_ids, scheduled_for, timezone, media_ids, draft, platform_content }) => {
+    async ({ content, account_ids, scheduled_for, timezone, media_ids, draft, platform_content, use_queue }) => {
       const result = await client.createPost({
         content,
         account_ids,
@@ -124,6 +175,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
         media_ids,
         draft,
         platform_content,
+        use_queue,
       });
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
@@ -143,7 +195,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       account_ids: z.array(z.number()).optional().describe('Optional: accounts to publish to, overriding the draft\'s saved targets.'),
       timezone: z.string().optional().describe('IANA timezone for display (does not change when the post fires).'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async ({ post_id, scheduled_for, publish_now, account_ids, timezone }) => {
       const result = await client.schedulePost(post_id, { scheduled_for, publish_now, account_ids, timezone });
@@ -165,16 +222,23 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       timezone: z.string().optional().describe('New IANA timezone for scheduling'),
       account_ids: z.array(z.number()).optional().describe('New array of social account IDs to post to'),
       media_ids: z.array(z.string()).optional().describe('New array of media UUIDs to attach. Get these from upload_media_from_url or generate_image.'),
+      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name, same shape as create_post. Use this to correct a queued post, e.g. set the Pinterest board and destination link: {"pinterest": {"settings": {"boardId": "...", "link": "https://..."}}}. Settings merge into the post before it publishes. For an X Article, set {"x": {"settings": {"post_type": "article", "title": "..."}}}.'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: true },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
     },
-    async ({ post_id, content, scheduled_for, timezone, account_ids, media_ids }) => {
+    async ({ post_id, content, scheduled_for, timezone, account_ids, media_ids, platform_content }) => {
       const result = await client.updatePost(post_id, {
         content,
         scheduled_for,
         timezone,
         account_ids,
         media_ids,
+        platform_content,
       });
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
@@ -186,16 +250,27 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'delete_post',
     {
       title: 'Delete Post',
-      description: 'Delete a scheduled or draft post from PostEverywhere. This permanently removes the post and all its platform destinations. Cannot delete posts that have already been published. Use with caution as this action cannot be undone.',
+      description: 'Delete a post from PostEverywhere. This permanently removes the post and all its platform destinations from PostEverywhere. A post that has ALREADY PUBLISHED stays live on the social platforms by default; set delete_on_x: true to also delete its published X (Twitter) copy (other platforms are not deleted). Only set delete_on_x when the user explicitly asks to remove the post from X. Cannot be undone.',
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post to delete'),
+      delete_on_x: z.boolean().optional().describe('Also delete the published X copy of this post. Default false. Only when the user explicitly asks.'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        // delete_on_x reaches X, an external system.
+        openWorldHint: true,
+      },
     },
-    async ({ post_id }) => {
-      const result = await client.deletePost(post_id);
+    async ({ post_id, delete_on_x }) => {
+      const result: any = await client.deletePost(post_id, { deleteOnX: delete_on_x === true });
+      const xd: any[] = Array.isArray(result?.x_deletion) ? result.x_deletion : [];
+      const xNote = delete_on_x
+        ? (xd.length === 0 ? ' It had no published X copy.' : xd.every((r) => r.deleted) ? ' Its X copy was deleted too.' : ` X did not delete it: ${xd.find((r) => !r.deleted)?.error || 'unknown error'}.`)
+        : '';
       return {
-        content: [{ type: 'text' as const, text: `Post ${post_id} deleted successfully.` }],
+        content: [{ type: 'text' as const, text: `Post ${post_id} deleted successfully.${xNote}` }],
       };
     }
   );
@@ -210,7 +285,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post to get results for'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ post_id }) => {
       const result = await client.getPostResults(post_id);
@@ -230,7 +310,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post with failed destinations'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async ({ post_id }) => {
       const result = await client.retryPost(post_id);
@@ -251,7 +336,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       type: z.enum(['image', 'video', 'document']).optional().describe('Filter by media type'),
       limit: z.number().min(1).max(100).optional().default(20).describe('Number of items to return'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ type, limit }) => {
       const result = await client.listMedia({ type, limit });
@@ -269,7 +359,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       media_id: z.string().uuid().describe('The UUID of the media file to retrieve'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ media_id }) => {
       const result = await client.getMediaStatus(media_id);
@@ -287,7 +382,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       media_id: z.string().uuid().describe('The UUID of the media file to delete'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ media_id }) => {
       const result = await client.deleteMedia(media_id);
@@ -301,12 +401,17 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'upload_media_from_url',
     {
       title: 'Upload Media from URL',
-      description: 'Import an image from a public URL into the PostEverywhere media library. The image is fetched server-side, stored, and immediately ready to attach to posts via media_ids. Supported: JPEG, PNG, GIF, WebP, HEIC, HEIF — up to 25 MB. Image-only for now; videos still require the 3-step REST flow (POST /v1/media/upload → PUT presigned URL → POST /v1/media/{id}/complete). Returns { media_id, url, content_type, size } — pass media_id directly to create_post.',
+      description: 'Import an image OR VIDEO from a public URL into the PostEverywhere media library, ready to attach to posts via media_ids. IMAGES (JPEG, PNG, GIF, WebP, HEIC, HEIF — up to 25 MB) import synchronously: the response media_id is ready immediately. VIDEOS (MP4 only — up to 4 GB) import ASYNCHRONOUSLY: the response returns media_id with media_status "uploading" right away while the file streams in server-side — poll get_media until media_status is "ready" (typically well under a minute), THEN attach it to a post. If media_status becomes "failed", get_media\'s error_message states exactly why (file too large, not actually an MP4, storage quota, unreachable URL). Never attach a media_id whose status you have not seen reach "ready".',
       inputSchema: {
-      url: z.string().url().describe('Public HTTPS URL pointing to the image. Must be reachable from the public internet (no private/loopback addresses).'),
+      url: z.string().url().describe('Public HTTPS URL pointing to the image or MP4 video. Must be reachable from the public internet (no private/loopback addresses).'),
       filename: z.string().optional().describe('Optional filename to record in the library. If omitted, derived from the URL path.'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async ({ url, filename }) => {
       const result = await client.uploadMediaFromUrl({ url, filename });
@@ -333,7 +438,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
         aspect_ratio: z.enum(['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4']).optional().default('1:1').describe('Aspect ratio for the generated image'),
         model: z.enum(['nano-banana-pro', 'ideogram-v2', 'gemini-3-pro', 'flux-schnell']).optional().default('gemini-3-pro').describe('AI model to use for generation'),
       },
-        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: true,
+          idempotentHint: false,
+          openWorldHint: false,
+        },
       },
       async ({ prompt, aspect_ratio, model }) => {
         const result = await client.generateImage({ prompt, aspect_ratio, model });
@@ -358,7 +468,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       include_emojis: z.boolean().optional().default(true).describe('Whether to include emojis'),
       count: z.number().min(1).max(5).optional().default(1).describe('Number of caption variants to return (1-5)'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       const result = await client.generateCaption(args);
@@ -374,10 +489,36 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Get Workspace Info',
       description: "Get the current API key context on PostEverywhere — who you are, what scopes your key has, what plan the organization is on, and what's remaining on each quota (accounts/AI credits/storage). Use this as the FIRST CALL when initializing an MCP session to self-discover the organization_id, scopes, and quota state.",
       inputSchema: {},
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async () => {
       const result = await client.getMe();
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  // ─── Platform rules ───────────────────────────────────────
+
+  server.registerTool(
+    'get_platform_rules',
+    {
+      title: 'Get Platform Rules',
+      description: "Get the per-platform publishing limits PostEverywhere enforces: character limit, image and video constraints (size, dimensions, duration, formats), and supported features (threads, carousels, reels, alt text, link cards). Call this BEFORE composing a post for an unfamiliar platform, or when a post was rejected for length or media format — it is the difference between one correct call and a failed publish. Server-authoritative and cheap: the values are static per deploy and cached, so a platform added server-side appears here with no update on your side. Takes no arguments and returns every platform at once.",
+      inputSchema: {},
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => {
+      const result = await client.getPlatformRules();
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }
   );
@@ -388,13 +529,18 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'get_analytics_summary',
     {
       title: 'Get Analytics Summary',
-      description: 'Get aggregate posting metrics over a time window on PostEverywhere. Returns counts (scheduled/published/failed), per-platform breakdown, total views/likes/comments/shares/impressions/clicks across all published posts, and AI credit usage. One call answers "how many posts have I published this week?" without listing every post.',
+      description: 'Get aggregate posting metrics over a time window on PostEverywhere. Returns counts (scheduled/published/failed), per-platform breakdown, total views/likes/comments/shares/impressions/clicks across all published posts, AI credit usage, and AUDIENCE — the latest follower count per connected account plus its change over the period. One call answers "how many posts have I published this week and did my audience grow?" without listing every post. Follower snapshots begin 2026-08-31; an account with only one reading reports change_in_period as null, because a single point is not a trend.',
       inputSchema: {
       period: z.enum(['today','week','month','all','custom']).optional().default('month').describe('Time window — defaults to last 30 days'),
       from: z.string().optional().describe('ISO timestamp lower bound (required if period=custom)'),
       to: z.string().optional().describe('ISO timestamp upper bound (required if period=custom)'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       const result = await client.getAnalyticsSummary(args);
@@ -414,7 +560,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       limit: z.number().min(1).max(100).optional().default(50).describe('Page size'),
       offset: z.number().min(0).optional().default(0).describe('Pagination offset'),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       const result = await client.listCampaigns(args);
@@ -433,7 +584,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().describe('Hex color like #3b82f6'),
       status: z.enum(['active','archived']).optional().default('active'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       const result = await client.createCampaign(args);
@@ -447,7 +603,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Get Campaign',
       description: 'Get details of a single campaign on PostEverywhere by its id, including post_count.',
       inputSchema: { id: z.number().describe('Campaign id') },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ id }) => {
       const result = await client.getCampaign(id);
@@ -467,7 +628,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
       status: z.enum(['active','archived']).optional(),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ id, ...body }) => {
       const result = await client.updateCampaign(id, body);
@@ -481,7 +647,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Delete Campaign',
       description: 'Delete a campaign on PostEverywhere. Posts in the campaign survive — their campaign_id is set to NULL.',
       inputSchema: { id: z.number().describe('Campaign id') },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ id }) => {
       const result = await client.deleteCampaign(id);
@@ -499,7 +670,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       posts: z.array(z.any()).min(1).max(50).describe('Array of post objects (same shape as create_post body). Max 50.'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async ({ posts }) => {
       const result = await client.bulkCreatePosts(posts);
@@ -520,7 +696,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       failed_before: z.string().optional().describe('ISO timestamp — only retry failures before this'),
       max_attempts: z.number().min(1).max(10).optional().describe('Skip destinations with attempt_count >= this'),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async (args) => {
       const result = await client.retryFailedPosts(args);
@@ -536,10 +717,83 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Get Account Health',
       description: 'Check the health of a connected social account on PostEverywhere. Returns status (healthy|warning|broken), can_post boolean, token expiry, needs_reconnection flag, recent failure count, last successful publish. Use this before publishing to detect a dead token BEFORE it causes a failed post.',
       inputSchema: { id: z.number().describe('Social account id') },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ id }) => {
       const result = await client.getAccountHealth(id);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  // ─── Account Connect (agent-driven) ───────────────────────
+
+  server.registerTool(
+    'create_connect_link',
+    {
+      title: 'Create Account Connect Link',
+      description: 'Generate a short-lived authorization URL (10 min) to connect a NEW social account via OAuth: x, instagram, facebook, youtube, pinterest, threads, linkedin, or tiktok. Give the URL to the account owner to open in any browser and approve; the connected account then appears in list_accounts (poll it to confirm). For telegram, discord, or bluesky use connect_credential_account instead (no browser needed).',
+      inputSchema: {
+        platform: z.enum(['x', 'instagram', 'facebook', 'youtube', 'pinterest', 'threads', 'linkedin', 'tiktok']).describe('OAuth platform to connect'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ platform }) => {
+      const result = await client.createConnectLink(platform);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'create_reconnect_link',
+    {
+      title: 'Create Account Reconnect Link',
+      description: 'Generate a short-lived authorization URL (10 min) to FIX an existing OAuth account whose token died (needs_reconnection from get_account_health). The owner opens it, approves while logged in as that same profile, and the existing account is repaired in place. Verify afterwards with get_account_health.',
+      inputSchema: { account_id: z.number().describe('Social account id to reconnect') },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ account_id }) => {
+      const result = await client.createReconnectLink(account_id);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'connect_credential_account',
+    {
+      title: 'Connect Credential Account',
+      description: 'Connect telegram, discord, or bluesky entirely in this conversation, no browser needed. telegram: bot_token (from @BotFather, bot must be channel admin) + channel (@username or chat id). discord: webhook_url. bluesky: handle + app_password (Settings > App Passwords, never the main password). Credentials are validated live before saving; re-submitting for an existing account updates it in place.',
+      inputSchema: {
+        platform: z.enum(['telegram', 'discord', 'bluesky']).describe('Credential-based platform'),
+        bot_token: z.string().optional().describe('telegram only: bot token from @BotFather'),
+        channel: z.string().optional().describe('telegram only: @channelusername or numeric chat id'),
+        webhook_url: z.string().optional().describe('discord only: incoming webhook URL'),
+        handle: z.string().optional().describe('bluesky only: account handle, e.g. me.bsky.social'),
+        app_password: z.string().optional().describe('bluesky only: app password, not the main password'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (args) => {
+      const result = await client.connectCredentialAccount(args);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }
   );
@@ -552,7 +806,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'List Webhooks',
       description: 'List all webhook subscriptions on PostEverywhere for the current organization. Returns id, url, subscribed events, is_active, recent delivery stats. Note: the signing secret is NEVER included in list responses.',
       inputSchema: {},
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async () => {
       const result = await client.listWebhooks();
@@ -571,7 +830,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       name: z.string().max(100).optional().describe('Human-readable name for the subscription'),
       description: z.string().max(500).optional(),
     },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       const result = await client.createWebhook(args);
@@ -585,7 +849,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Get Webhook',
       description: 'Get details of a single webhook subscription on PostEverywhere (does NOT include the signing secret).',
       inputSchema: { id: z.string().uuid().describe('Webhook id') },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ id }) => {
       const result = await client.getWebhook(id);
@@ -606,7 +875,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       description: z.string().max(500).optional(),
       is_active: z.boolean().optional(),
     },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ id, ...body }) => {
       const result = await client.updateWebhook(id, body);
@@ -620,7 +894,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Delete Webhook',
       description: 'Delete a webhook subscription on PostEverywhere. Cascades to delete the delivery history.',
       inputSchema: { id: z.string().uuid() },
-      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async ({ id }) => {
       const result = await client.deleteWebhook(id);
@@ -634,7 +913,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       title: 'Test Webhook',
       description: 'Send a synthetic test ping to a webhook URL on PostEverywhere so you can verify your endpoint receives the request and validates the HMAC signature. Returns the receiver\'s HTTP status + duration.',
       inputSchema: { id: z.string().uuid() },
-      annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
     },
     async ({ id }) => {
       const result = await client.testWebhook(id);
@@ -667,7 +951,12 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       limit: z.number().min(1).max(100).optional().default(20),
       offset: z.number().min(0).optional().default(0),
     },
-      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
     },
     async (args) => {
       const result = await client.listPostsAdvanced(args);

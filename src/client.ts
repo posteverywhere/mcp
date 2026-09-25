@@ -5,6 +5,11 @@
  * Used by the MCP server to call PostEverywhere endpoints.
  */
 
+// THE version. package.json, the MCP server info, and the API User-Agent all
+// derive from here — three hardcoded copies drifted to 1.4.1 / 1.5.0 / 1.6.0
+// and the stale UA cost a real debugging detour on 2026-08-19.
+export const MCP_VERSION = '1.7.0';
+
 export interface ApiResponse<T = unknown> {
   data: T;
   error: { message: string; details?: unknown } | null;
@@ -92,7 +97,7 @@ export class PostEverywhereClient {
         // Identifies MCP traffic to the v1 logger (→ PostHog client_tool='mcp').
         // Not a secret; lets us track MCP usage without touching this
         // zero-secret container's security model. Keep in step with package version.
-        'User-Agent': 'posteverywhere-mcp/1.4.1',
+        'User-Agent': `posteverywhere-mcp/${MCP_VERSION}`,
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -141,6 +146,11 @@ export class PostEverywhereClient {
     media_ids?: string[];
     platform_content?: Record<string, unknown>;
     draft?: boolean;
+    /**
+     * Let the workspace queue pick the time. Mutually exclusive with
+     * scheduled_for - the API refuses both with conflicting_schedule_mode.
+     */
+    use_queue?: boolean;
   }): Promise<{ post_id: string; status: string; scheduled_for: string | null; accounts_count?: number; message: string; next_steps?: Record<string, string> }> {
     return this.request('POST', '/posts', body);
   }
@@ -161,12 +171,13 @@ export class PostEverywhereClient {
     timezone?: string;
     account_ids?: number[];
     media_ids?: string[];
+    platform_content?: Record<string, unknown>;
   }): Promise<Post> {
     return this.request('PATCH', `/posts/${id}`, body);
   }
 
-  async deletePost(id: string): Promise<{ deleted: boolean; id: string }> {
-    return this.request('DELETE', `/posts/${id}`);
+  async deletePost(id: string, opts: { deleteOnX?: boolean } = {}): Promise<{ deleted: boolean; id: string; x_deletion?: Array<{ xPostId: string; deleted: boolean; error?: string }> }> {
+    return this.request('DELETE', `/posts/${id}${opts.deleteOnX ? '?delete_on_platforms=x' : ''}`);
   }
 
   // ─── Post Results ──────────────────────────────────────────
@@ -182,6 +193,21 @@ export class PostEverywhereClient {
   }
 
   // ─── Media ─────────────────────────────────────────────────
+
+  /**
+   * Preview the workspace posting queue: its slots and the next openings.
+   * The upcoming list is a FORECAST, not a reservation - a slot is only
+   * allocated when a post is created with use_queue.
+   */
+  async getQueue(params?: { preview?: number }): Promise<{
+    queue: { id: string; name: string; timezone: string; slots: Array<{ day_of_week: number; time: string }> } | null;
+    upcoming: Array<{ date: string; time: string }>;
+    exhausted?: boolean;
+    message?: string;
+  }> {
+    const qs = params?.preview ? `?preview=${params.preview}` : '';
+    return this.request('GET', `/queue${qs}`);
+  }
 
   async listMedia(params?: { type?: string; limit?: number; offset?: number }): Promise<{ media: MediaItem[]; pagination: { limit: number; offset: number } }> {
     const qs = new URLSearchParams();
@@ -281,6 +307,27 @@ export class PostEverywhereClient {
     return this.request('GET', '/me');
   }
 
+  // ─── Platform rules ────────────────────────────────────────
+
+  /**
+   * The server's canonical per-platform limits. Exists so agents never hardcode
+   * character caps or media constraints — a platform added server-side lights up
+   * here with no client change (the "thin-client law", see the route's header).
+   *
+   * Worth calling BEFORE composing: the alternative is posting and learning the
+   * rules from a 400. Measured 2026-08-17, one week of v1 errors: 1,056 × 400
+   * where the top classes are content/format violations this endpoint predicts.
+   */
+  async getPlatformRules(): Promise<{
+    platforms: Record<string, {
+      characterLimit: number;
+      media: { video: unknown | null; image: unknown | null };
+      features: string[];
+    }>;
+  }> {
+    return this.request('GET', '/platform-rules');
+  }
+
   // ─── Analytics ─────────────────────────────────────────────
 
   async getAnalyticsSummary(params?: { period?: 'today' | 'week' | 'month' | 'all' | 'custom'; from?: string; to?: string }): Promise<any> {
@@ -335,6 +382,27 @@ export class PostEverywhereClient {
 
   async getAccountHealth(id: number): Promise<any> {
     return this.request('GET', `/accounts/${id}/health`);
+  }
+
+  // ─── Account Connect (agent-driven) ────────────────────────
+
+  async createConnectLink(platform: string): Promise<any> {
+    return this.request('POST', '/accounts/connect-link', { platform });
+  }
+
+  async createReconnectLink(accountId: number): Promise<any> {
+    return this.request('POST', `/accounts/${accountId}/reconnect`);
+  }
+
+  async connectCredentialAccount(body: {
+    platform: string;
+    bot_token?: string;
+    channel?: string;
+    webhook_url?: string;
+    handle?: string;
+    app_password?: string;
+  }): Promise<any> {
+    return this.request('POST', '/accounts/connect-credential', body);
   }
 
   // ─── Webhooks ──────────────────────────────────────────────

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.8.0 (2026-09-25)
+### Added
+- **X Articles.** `create_post` and `update_post` can publish long-form X Articles: set `platform_content.x.settings.post_type` to `"article"` with a `title` (up to 100 characters). The body supports headings, lists, quotes, bold, italic, links, dividers, embedded posts, code blocks, tables and inline images. The first image is the cover. Needs X Premium; 2 articles per X account per day.
+- **X labels and Communities.** X settings accept `made_with_ai`, `paid_partnership` and `community_id`.
+- **`delete_post` can remove the live X post** with `delete_on_x: true`. Off by default.
+- **`get_queue`** returns the posting queue, with approval status.
+
+### Changed
+- Every tool now declares all four MCP annotation hints (read-only, destructive, idempotent, open-world).
+- Media: videos up to 4 GB (was 500 MB) for `upload_media_from_url` and uploads.
+- The server reports its real package version.
+
 ## 1.5.1 (2026-07-24)
 - No code changes. Version alignment release: adds the npm package to the Official MCP Registry listing (ai.posteverywhere/mcp) alongside the hosted remote.
  — `@posteverywhere/mcp`
