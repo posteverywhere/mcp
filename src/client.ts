@@ -401,6 +401,8 @@ export class PostEverywhereClient {
     webhook_url?: string;
     handle?: string;
     app_password?: string;
+    site_url?: string;
+    username?: string;
   }): Promise<any> {
     return this.request('POST', '/accounts/connect-credential', body);
   }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.0 (2026-09-26)
+### Added
+- **WordPress.** `connect_credential_account` connects a self-hosted WordPress site (`site_url`, `username`, `app_password`). `create_post`, `update_post` and `bulk_create_posts` publish blog posts with `platform_content.wordpress`: `content` (Markdown-style or HTML body, up to 200,000 characters) and `settings` (`title` up to 200 characters, `status` publish/draft/pending/private, `excerpt`, `slug`, `tags`, `categories`, `featuredImage` first/none). Up to 20 images and 1 video; the first image is the featured image. A bad setting or a missing title returns a clear 400.
+- `list_posts` and `retry_failed_posts` accept `wordpress` as a platform. `get_account` names the WordPress site. `get_platform_rules` lists the blog post fields under `platforms.wordpress.blog`.
+
 ## 1.8.0 (2026-09-25)
 ### Added
 - **X Articles.** `create_post` and `update_post` can publish long-form X Articles: set `platform_content.x.settings.post_type` to `"article"` with a `title` (up to 100 characters). The body supports headings, lists, quotes, bold, italic, links, dividers, embedded posts, code blocks, tables and inline images. The first image is the cover. Needs X Premium; 2 articles per X account per day.

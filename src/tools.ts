@@ -75,7 +75,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'get_account',
     {
       title: 'Get Account',
-      description: 'Get detailed information about a specific connected social media account on PostEverywhere. Returns the account platform, username, health status, and whether it can currently post. Use this to check the status of a single account by its ID.',
+      description: 'Get detailed information about a specific connected social media account on PostEverywhere. Returns the account platform, username, health status, and whether it can currently post (Pinterest also lists its boards; WordPress names its site). Use this to check the status of a single account by its ID.',
       inputSchema: {
       account_id: z.number().describe('The numeric ID of the social account to retrieve'),
     },
@@ -103,7 +103,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       description: 'List scheduled, published, or draft posts on PostEverywhere. Supports filtering by status (scheduled, published, draft) and platform. Returns post content, scheduling info, and per-platform destination statuses. Use this to check what posts are queued or to review published content.',
       inputSchema: {
       status: z.enum(['scheduled', 'published', 'draft']).optional().describe('Filter by post status'),
-      platform: z.string().optional().describe('Filter by platform (e.g., instagram, linkedin, x)'),
+      platform: z.string().optional().describe('Filter by platform (e.g., instagram, linkedin, x, wordpress)'),
       limit: z.number().min(1).max(100).optional().default(20).describe('Number of posts to return'),
     },
       annotations: {
@@ -157,7 +157,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       media_ids: z.array(z.string()).optional().describe('Array of media UUIDs to attach. Get these from upload_media_from_url (recommended) or generate_image. Existing library files can be looked up with list_media.'),
       draft: z.boolean().optional().describe('Set true to save as a DRAFT for human review instead of publishing or scheduling. The draft is NOT published until you call schedule_post on it. Review drafts with list_posts(status:"draft") or get_post.'),
       use_queue: z.boolean().optional().describe('Set true to let the workspace posting queue choose the time: the next free slot is allocated at create time. Use this instead of scheduled_for when the user says "add it to the queue", "post it at my usual times", or "whenever is next free". Mutually exclusive with scheduled_for - sending both is rejected. Call get_queue first if you want to tell the user WHICH slot they will get.'),
-      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name (e.g. {"instagram": {...}}). Each entry may set "content" (platform-specific caption) and "contentType" (the post format for that platform). contentType values: Instagram "Post" | "Reels" | "Story" | "Trial Reel"; Facebook "Post" | "Reels" | "Story"; YouTube "Video" | "Short". Omit contentType to use the platform default (video media defaults to Reels on Instagram). Each entry may also set "settings" with platform-specific options, e.g. Pinterest {"settings": {"boardId": "...", "link": "https://...", "title": "..."}} to pick the board and destination link, YouTube {"settings": {"title": "..."}}. X: {"x": {"settings": {"made_with_ai": true, "paid_partnership": true, "community_id": "<numeric X Community id>"}}} adds X\'s disclosure labels or posts into a Community the account belongs to. X ARTICLE (long-form, X Premium accounts only): {"x": {"content": "<body: # headings, - lists, > quotes, **bold**, *italic*, [links](https://...)>", "settings": {"post_type": "article", "title": "<max 100 chars>"}}} with ONLY X account ids, up to 5 images in media_ids (the first is the cover, 2000x800 looks best; place others inline with a line ![caption](image:2), or they go at the end), no video, body up to 25,000 characters. The body also supports --- dividers, ```code``` blocks, | tables |, a line that is just an X post link (embeds it) and ![caption](https://image-url). Limited to 2 published articles per X account per 24 hours.'),
+      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name (e.g. {"instagram": {...}}). Each entry may set "content" (platform-specific caption) and "contentType" (the post format for that platform). contentType values: Instagram "Post" | "Reels" | "Story" | "Trial Reel"; Facebook "Post" | "Reels" | "Story"; YouTube "Video" | "Short". Omit contentType to use the platform default (video media defaults to Reels on Instagram). Each entry may also set "settings" with platform-specific options, e.g. Pinterest {"settings": {"boardId": "...", "link": "https://...", "title": "..."}} to pick the board and destination link, YouTube {"settings": {"title": "..."}}. X: {"x": {"settings": {"made_with_ai": true, "paid_partnership": true, "community_id": "<numeric X Community id>"}}} adds X\'s disclosure labels or posts into a Community the account belongs to. X ARTICLE (long-form, X Premium accounts only): {"x": {"content": "<body: # headings, - lists, > quotes, **bold**, *italic*, [links](https://...)>", "settings": {"post_type": "article", "title": "<max 100 chars>"}}} with ONLY X account ids, up to 5 images in media_ids (the first is the cover, 2000x800 looks best; place others inline with a line ![caption](image:2), or they go at the end), no video, body up to 25,000 characters. The body also supports --- dividers, ```code``` blocks, | tables |, a line that is just an X post link (embeds it) and ![caption](https://image-url). Limited to 2 published articles per X account per 24 hours. WORDPRESS BLOG POST: {"wordpress": {"content": "<body, same formatting as X Articles; raw HTML is kept as-is>", "settings": {"title": "<max 200 chars; default = a leading # Heading, else the first line>", "status": "publish|draft|pending|private", "excerpt": "<max 1000>", "tags": ["a"], "categories": ["News"], "slug": "...", "featuredImage": "first|none"}}} with WordPress account ids (other platforms in the same call use the top-level content), up to 20 images + 1 video in media_ids (the first image is the featured image; place others inline with ![caption](image:N), or they go at the end; the video goes at the top), body up to 200,000 characters. tags/categories take arrays or a comma string (categories also take numeric ids); missing tags are created. A blog post with no title is refused with a 400.'),
     },
       annotations: {
         readOnlyHint: false,
@@ -187,7 +187,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'schedule_post',
     {
       title: 'Schedule Post',
-      description: 'Publish or schedule a DRAFT (created with create_post(draft: true)). Pass scheduled_for to schedule it for a future time, or publish_now: true to publish it right away. Optionally pass account_ids to set/override which accounts it posts to (defaults to the accounts saved on the draft). This is the final step of the review workflow: create_post(draft:true) → review with list_posts(status:"draft")/get_post → schedule_post. Only works on drafts — to re-time an already-scheduled post, use update_post.',
+      description: 'Publish or schedule a DRAFT (created with create_post(draft: true)). Pass scheduled_for to schedule it for a future time, or publish_now: true to publish it right away. Optionally pass account_ids to set/override which accounts it posts to (defaults to the accounts saved on the draft). This is the final step of the review workflow: create_post(draft:true) → review with list_posts(status:"draft")/get_post → schedule_post. Only works on drafts — to re-time an already-scheduled post, use update_post. A draft that targets a WordPress account must have a blog title (platform_content.wordpress.settings.title or a leading "# Heading"), or this returns a 400.',
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the draft to publish (from create_post or list_posts)'),
       scheduled_for: z.string().optional().describe('ISO 8601 datetime to schedule for (e.g., 2026-06-20T14:00:00Z). Provide this OR publish_now.'),
@@ -214,7 +214,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'update_post',
     {
       title: 'Update Post',
-      description: 'Update a scheduled or draft post on PostEverywhere. You can change the content, schedule time, timezone, target accounts, or media attachments. Only posts with status "scheduled" or "draft" can be edited — published posts cannot be modified. Returns the updated post with all its details.',
+      description: 'Update a scheduled or draft post on PostEverywhere. You can change the content, schedule time, timezone, target accounts, media attachments, or per-platform content (including a WordPress blog post\'s title, status, tags and categories). Only posts with status "scheduled" or "draft" can be edited — published posts cannot be modified. Returns the updated post with all its details.',
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post to update'),
       content: z.string().optional().describe('New text content for the post'),
@@ -222,7 +222,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       timezone: z.string().optional().describe('New IANA timezone for scheduling'),
       account_ids: z.array(z.number()).optional().describe('New array of social account IDs to post to'),
       media_ids: z.array(z.string()).optional().describe('New array of media UUIDs to attach. Get these from upload_media_from_url or generate_image.'),
-      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name, same shape as create_post. Use this to correct a queued post, e.g. set the Pinterest board and destination link: {"pinterest": {"settings": {"boardId": "...", "link": "https://..."}}}. Settings merge into the post before it publishes. For an X Article, set {"x": {"settings": {"post_type": "article", "title": "..."}}}.'),
+      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name, same shape as create_post. Use this to correct a queued post, e.g. set the Pinterest board and destination link: {"pinterest": {"settings": {"boardId": "...", "link": "https://..."}}}. Settings merge into the post before it publishes. For an X Article, set {"x": {"settings": {"post_type": "article", "title": "..."}}}. For a WordPress blog post, set {"wordpress": {"content": "...", "settings": {"title": "...", "status": "draft", "tags": ["a"]}}}.'),
     },
       annotations: {
         readOnlyHint: false,
@@ -461,7 +461,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       description: 'Generate 1-5 AI caption variants for a social media post on PostEverywhere. Provide a topic and optionally tone, platform, length, hashtag/emoji preferences. Captions respect per-platform character limits (X: 280, Bluesky: 300, LinkedIn: 3000, IG: 2200, FB: 5000, etc) and follow platform conventions. Costs 1 AI credit per caption returned. Companion to generate_image — together they let you compose a complete post in two calls.',
       inputSchema: {
       topic: z.string().max(1000).describe('What the post should be about'),
-      platform: z.enum(['instagram','facebook','x','twitter','linkedin','youtube','tiktok','threads','pinterest','bluesky']).optional().describe('Target platform — sets character limit + style conventions'),
+      platform: z.enum(['instagram','facebook','x','twitter','linkedin','youtube','tiktok','threads','pinterest','bluesky','wordpress']).optional().describe('Target platform — sets character limit + style conventions'),
       tone: z.enum(['professional','casual','witty','enthusiastic','urgent','inspirational']).optional().default('professional').describe('Tone of voice for the caption'),
       length: z.enum(['short','medium','long']).optional().default('medium').describe('Approximate caption length'),
       include_hashtags: z.boolean().optional().default(true).describe('Whether to include hashtags (defaults to platform-appropriate)'),
@@ -508,7 +508,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'get_platform_rules',
     {
       title: 'Get Platform Rules',
-      description: "Get the per-platform publishing limits PostEverywhere enforces: character limit, image and video constraints (size, dimensions, duration, formats), and supported features (threads, carousels, reels, alt text, link cards). Call this BEFORE composing a post for an unfamiliar platform, or when a post was rejected for length or media format — it is the difference between one correct call and a failed publish. Server-authoritative and cheap: the values are static per deploy and cached, so a platform added server-side appears here with no update on your side. Takes no arguments and returns every platform at once.",
+      description: "Get the per-platform publishing limits PostEverywhere enforces: character limit, image and video constraints (size, dimensions, duration, formats), and supported features (threads, carousels, reels, alt text, link cards, blog posts). WordPress also lists its blog post fields under platforms.wordpress.blog. Call this BEFORE composing a post for an unfamiliar platform, or when a post was rejected for length or media format — it is the difference between one correct call and a failed publish. Server-authoritative and cheap: the values are static per deploy and cached, so a platform added server-side appears here with no update on your side. Takes no arguments and returns every platform at once.",
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -666,7 +666,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'bulk_create_posts',
     {
       title: 'Bulk Create Posts',
-      description: 'Create up to 50 posts in one PostEverywhere API call (counts as ONE API-rate-limit hit instead of 50). Each post goes through the same validation as create_post. Returns per-item success/error so you can handle partial failures. Use this for bulk scheduling workflows.',
+      description: 'Create up to 50 posts in one PostEverywhere API call (counts as ONE API-rate-limit hit instead of 50). Each post goes through the same validation as create_post, including X Articles and WordPress blog posts (platform_content.wordpress). Returns per-item success/error so you can handle partial failures. Use this for bulk scheduling workflows.',
       inputSchema: {
       posts: z.array(z.any()).min(1).max(50).describe('Array of post objects (same shape as create_post body). Max 50.'),
     },
@@ -691,7 +691,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       inputSchema: {
       post_ids: z.array(z.string().uuid()).max(200).optional().describe('Explicit list of post UUIDs to retry failed destinations on'),
       account_id: z.number().optional().describe('Retry only failures on this social account'),
-      platform: z.enum(['instagram','facebook','x','twitter','linkedin','youtube','tiktok','threads','pinterest','bluesky','telegram','discord']).optional(),
+      platform: z.enum(['instagram','facebook','x','twitter','linkedin','youtube','tiktok','threads','pinterest','bluesky','telegram','discord','wordpress']).optional(),
       failed_after: z.string().optional().describe('ISO timestamp — only retry failures after this'),
       failed_before: z.string().optional().describe('ISO timestamp — only retry failures before this'),
       max_attempts: z.number().min(1).max(10).optional().describe('Skip destinations with attempt_count >= this'),
@@ -736,7 +736,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'create_connect_link',
     {
       title: 'Create Account Connect Link',
-      description: 'Generate a short-lived authorization URL (10 min) to connect a NEW social account via OAuth: x, instagram, facebook, youtube, pinterest, threads, linkedin, or tiktok. Give the URL to the account owner to open in any browser and approve; the connected account then appears in list_accounts (poll it to confirm). For telegram, discord, or bluesky use connect_credential_account instead (no browser needed).',
+      description: 'Generate a short-lived authorization URL (10 min) to connect a NEW social account via OAuth: x, instagram, facebook, youtube, pinterest, threads, linkedin, or tiktok. Give the URL to the account owner to open in any browser and approve; the connected account then appears in list_accounts (poll it to confirm). For telegram, discord, bluesky or wordpress use connect_credential_account instead (no browser needed).',
       inputSchema: {
         platform: z.enum(['x', 'instagram', 'facebook', 'youtube', 'pinterest', 'threads', 'linkedin', 'tiktok']).describe('OAuth platform to connect'),
       },
@@ -776,14 +776,16 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'connect_credential_account',
     {
       title: 'Connect Credential Account',
-      description: 'Connect telegram, discord, or bluesky entirely in this conversation, no browser needed. telegram: bot_token (from @BotFather, bot must be channel admin) + channel (@username or chat id). discord: webhook_url. bluesky: handle + app_password (Settings > App Passwords, never the main password). Credentials are validated live before saving; re-submitting for an existing account updates it in place.',
+      description: 'Connect telegram, discord, bluesky or wordpress entirely in this conversation, no browser needed. telegram: bot_token (from @BotFather, bot must be channel admin) + channel (@username or chat id). discord: webhook_url. bluesky: handle + app_password (Settings > App Passwords, never the main password). wordpress (self-hosted, WordPress 5.6+): site_url + username + app_password (WordPress: Users > Profile > Application Passwords, never the login password). Credentials are validated live before saving; re-submitting for an existing account updates it in place.',
       inputSchema: {
-        platform: z.enum(['telegram', 'discord', 'bluesky']).describe('Credential-based platform'),
+        platform: z.enum(['telegram', 'discord', 'bluesky', 'wordpress']).describe('Credential-based platform'),
         bot_token: z.string().optional().describe('telegram only: bot token from @BotFather'),
         channel: z.string().optional().describe('telegram only: @channelusername or numeric chat id'),
         webhook_url: z.string().optional().describe('discord only: incoming webhook URL'),
         handle: z.string().optional().describe('bluesky only: account handle, e.g. me.bsky.social'),
-        app_password: z.string().optional().describe('bluesky only: app password, not the main password'),
+        app_password: z.string().optional().describe('bluesky or wordpress: app password / Application Password, not the main password'),
+        site_url: z.string().optional().describe('wordpress only: site address, e.g. https://example.com'),
+        username: z.string().optional().describe('wordpress only: the WordPress login name'),
       },
       annotations: {
         readOnlyHint: false,
