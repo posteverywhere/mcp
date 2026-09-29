@@ -27,6 +27,11 @@ export function describeApiError(
   status: number,
   retryAfter: string | null,
 ): string {
+  // 402 = plan or credits. State the fact only: no upgrade links or sales
+  // wording in tool output (app directory commerce rules), and nothing to retry.
+  if (status === 402) {
+    return "This action is not available with the account's current plan or remaining AI credits (HTTP 402). Do not retry. Tell the user it is not available on their current plan.";
+  }
   const parts: string[] = [error.message];
   if (error.code) parts.push(`(code: ${error.code}, HTTP ${status})`);
   if (error.details !== undefined && error.details !== null) {
@@ -37,8 +42,6 @@ export function describeApiError(
   if (status === 429) {
     const wait = retryAfter && /^\d+$/.test(retryAfter) ? `${retryAfter} seconds` : 'a while';
     parts.push(`Rate limited: wait ${wait} before trying again, and do not retry in a loop.`);
-  } else if (status === 402) {
-    parts.push('Not enough credits: do not retry. Tell the user they can add credits or upgrade at app.posteverywhere.ai.');
   } else if (error.retryable === false) {
     parts.push('Retrying the same request will fail the same way: fix the request first, or tell the user what needs to change.');
   } else if (error.retryable === true) {

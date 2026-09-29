@@ -432,7 +432,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       'generate_image',
       {
         title: 'Generate AI Image',
-        description: 'Generate an AI image from a text prompt on PostEverywhere. The image is saved to your media library and can be attached to posts via media_ids. Choose from 4 models: gemini-3-pro (default, balanced quality, 5 credits), nano-banana-pro (photorealism, 15 credits), ideogram-v2 (best for text-in-image, 8 credits), flux-schnell (fastest, 1 credit). Requires the "ai" scope on your API key.',
+        description: 'Generate an AI image from a text prompt on PostEverywhere. The image is saved to your media library and can be attached to posts via media_ids. Choose from 4 models: gemini-3-pro (default, balanced quality, 5 credits), nano-banana-pro (photorealism, 15 credits), ideogram-v2 (good for text in images, 8 credits), flux-schnell (fastest, 1 credit). Requires the "ai" scope.',
         inputSchema: {
         prompt: z.string().max(2000).describe('Text description of the image to generate'),
         aspect_ratio: z.enum(['1:1', '16:9', '9:16', '4:3', '3:4', '4:5', '5:4']).optional().default('1:1').describe('Aspect ratio for the generated image'),
@@ -487,7 +487,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'get_me',
     {
       title: 'Get Workspace Info',
-      description: "Get the current API key context on PostEverywhere — who you are, what scopes your key has, what plan the organization is on, and what's remaining on each quota (accounts/AI credits/storage). Use this as the FIRST CALL when initializing an MCP session to self-discover the organization_id, scopes, and quota state.",
+      description: "Get the signed-in PostEverywhere account: the user, the workspace, the granted scopes, the organization's plan, and what is left on each quota (accounts, AI credits, storage). Useful at the start of a conversation to learn the organization_id, scopes and quota state.",
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
