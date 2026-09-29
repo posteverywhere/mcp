@@ -12,8 +12,39 @@ export const MCP_VERSION = '1.7.0';
 
 export interface ApiResponse<T = unknown> {
   data: T;
-  error: { message: string; details?: unknown } | null;
+  error: { message: string; code?: string; retryable?: boolean; details?: unknown } | null;
   meta: { request_id: string; timestamp: string };
+}
+
+/**
+ * Build the tool error text from a v1 error envelope. The API returns a code,
+ * a retryable flag and details (e.g. per-platform validation errors and a
+ * hint); passing only `message` left agents blind ("Platform validation
+ * failed") so they retried the same request until they hit the rate limit.
+ */
+export function describeApiError(
+  error: NonNullable<ApiResponse['error']>,
+  status: number,
+  retryAfter: string | null,
+): string {
+  const parts: string[] = [error.message];
+  if (error.code) parts.push(`(code: ${error.code}, HTTP ${status})`);
+  if (error.details !== undefined && error.details !== null) {
+    let detail = typeof error.details === 'string' ? error.details : JSON.stringify(error.details);
+    if (detail.length > 1500) detail = detail.slice(0, 1500) + '...';
+    parts.push(`Details: ${detail}`);
+  }
+  if (status === 429) {
+    const wait = retryAfter && /^\d+$/.test(retryAfter) ? `${retryAfter} seconds` : 'a while';
+    parts.push(`Rate limited: wait ${wait} before trying again, and do not retry in a loop.`);
+  } else if (status === 402) {
+    parts.push('Not enough credits: do not retry. Tell the user they can add credits or upgrade at app.posteverywhere.ai.');
+  } else if (error.retryable === false) {
+    parts.push('Retrying the same request will fail the same way: fix the request first, or tell the user what needs to change.');
+  } else if (error.retryable === true) {
+    parts.push('This may be temporary: you can retry once.');
+  }
+  return parts.join(' ');
 }
 
 export interface Account {
@@ -103,10 +134,21 @@ export class PostEverywhereClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const json = await resp.json() as ApiResponse<T>;
+    const text = await resp.text();
+    let json: ApiResponse<T>;
+    try {
+      json = JSON.parse(text) as ApiResponse<T>;
+    } catch {
+      // A proxy or gateway page (502/504, timeout) is not JSON. Say so plainly
+      // instead of surfacing "Unexpected token <" to the agent.
+      throw new Error(
+        `PostEverywhere API returned HTTP ${resp.status} with a non-JSON body. ` +
+        'This is a temporary server problem: wait about 30 seconds, then try once more.'
+      );
+    }
 
     if (json.error) {
-      throw new Error(json.error.message);
+      throw new Error(describeApiError(json.error, resp.status, resp.headers.get('retry-after')));
     }
 
     return json.data;
