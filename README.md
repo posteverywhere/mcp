@@ -8,7 +8,7 @@ mcp-name: io.github.posteverywhere/mcp
 [![GitHub stars](https://img.shields.io/github/stars/posteverywhere/mcp?style=flat-square)](https://github.com/posteverywhere/mcp)
 [![Glama quality score](https://glama.ai/mcp/servers/posteverywhere/mcp/badges/score.svg)](https://glama.ai/mcp/servers/posteverywhere/mcp)
 
-Official [Model Context Protocol](https://modelcontextprotocol.io) server for [PostEverywhere](https://posteverywhere.ai) — let [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), [Claude Desktop](https://claude.ai/download), [ChatGPT](https://chatgpt.com) (via the [hosted connector](https://posteverywhere.ai/agents)), [Cursor](https://cursor.sh), [OpenAI Codex](https://openai.com/codex/), and other MCP-compatible AI clients **schedule and publish social media posts to Instagram, TikTok, YouTube, LinkedIn, Facebook, X (Twitter), Threads, and Pinterest** using natural language.
+Official [Model Context Protocol](https://modelcontextprotocol.io) server for [PostEverywhere](https://posteverywhere.ai) — let [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), [Claude Desktop](https://claude.ai/download), [ChatGPT](https://chatgpt.com) (via the [hosted connector](https://posteverywhere.ai/agents)), [Cursor](https://cursor.sh), [OpenAI Codex](https://openai.com/codex/), and other MCP-compatible AI clients **schedule and publish posts to 12 platforms: Instagram, TikTok, YouTube, LinkedIn, Facebook, X (Twitter), Threads, Pinterest, Bluesky, Telegram, Discord and WordPress** using natural language.
 
 > 💡 **Building a programmatic integration?** Use the companion [`@posteverywhere/sdk`](https://www.npmjs.com/package/@posteverywhere/sdk) Node.js SDK instead — full TypeScript types, retry handling, error classes.
 
@@ -190,7 +190,7 @@ Each natural-language prompt maps to one or more MCP tool calls — the agent fi
 
 ## Supported Platforms
 
-All eight platforms work on every plan:
+All 12 platforms work on every plan:
 
 - **[Instagram](https://posteverywhere.ai/instagram-scheduler)** — feed, reels, stories, carousels
 - **[TikTok](https://posteverywhere.ai/tiktok-scheduler)** — videos, photo carousels
@@ -200,6 +200,10 @@ All eight platforms work on every plan:
 - **X (Twitter)** — text, threads, media (tier-aware char limits)
 - **Threads** — text and media posts
 - **Pinterest** — pins to boards
+- **Bluesky** — text and media posts
+- **Telegram** — posts to channels and groups
+- **Discord** — posts to server channels
+- **WordPress** — blog posts (self-hosted and WordPress.com)
 
 ## Configuration
 
@@ -284,7 +288,7 @@ PostEverywhere is the backend for all of these — every plan includes every pla
 - 📺 [YouTube Scheduler](https://posteverywhere.ai/youtube-scheduler) — videos with thumbnails, tags, descriptions, privacy controls
 - 💼 [LinkedIn Scheduler](https://posteverywhere.ai/linkedin-scheduler) — personal + Company Page posts, document carousels, video
 - 👍 [Facebook Scheduler](https://posteverywhere.ai/facebook-scheduler) — Pages, Reels, video, multi-image carousels
-- 🐦 X (Twitter), Threads, Pinterest — all included on every plan
+- 🐦 X (Twitter), Threads, Pinterest, Bluesky, Telegram, Discord and WordPress, all included on every plan
 
 ## Related
 
