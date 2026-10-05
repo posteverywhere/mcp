@@ -309,4 +309,4 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-Built by the team at [PostEverywhere](https://posteverywhere.ai). The smarter way to schedule social media to [Instagram](https://posteverywhere.ai/instagram-scheduler), [TikTok](https://posteverywhere.ai/tiktok-scheduler), [YouTube](https://posteverywhere.ai/youtube-scheduler), [LinkedIn](https://posteverywhere.ai/linkedin-scheduler), [Facebook](https://posteverywhere.ai/facebook-scheduler), X, Threads, and Pinterest — now with native [MCP support](https://modelcontextprotocol.io) for AI agents.
+Built by the team at [PostEverywhere](https://posteverywhere.ai). The smarter way to schedule social media to [Instagram](https://posteverywhere.ai/instagram-scheduler), [TikTok](https://posteverywhere.ai/tiktok-scheduler), [YouTube](https://posteverywhere.ai/youtube-scheduler), [LinkedIn](https://posteverywhere.ai/linkedin-scheduler), [Facebook](https://posteverywhere.ai/facebook-scheduler), X, Threads, Pinterest, Bluesky, Telegram, Discord and WordPress, now with native [MCP support](https://modelcontextprotocol.io) for AI agents.
