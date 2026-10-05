@@ -5,10 +5,24 @@
  * Used by the MCP server to call PostEverywhere endpoints.
  */
 
-// THE version. package.json, the MCP server info, and the API User-Agent all
-// derive from here — three hardcoded copies drifted to 1.4.1 / 1.5.0 / 1.6.0
-// and the stale UA cost a real debugging detour on 2026-08-19.
-export const MCP_VERSION = '1.7.0';
+import { createRequire } from 'node:module';
+
+// THE version, read from package.json at runtime so it can't drift. The MCP
+// server info and the API User-Agent both use it. Hardcoded copies drifted to
+// 1.4.1 / 1.5.0 / 1.6.0 and then sat at 1.7.0 while the package was 1.9.0;
+// the stale UA cost a real debugging detour on 2026-08-19.
+// package.json is next to src/ and dist/ in the repo, the npm package and the
+// hosted image (Dockerfile.http copies it to /srv), so '../package.json'
+// resolves from both src/client.ts and dist/client.js.
+export function readPackageVersion(): string {
+  try {
+    const v = createRequire(import.meta.url)('../package.json')?.version;
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  } catch { /* fall through */ }
+  return 'unknown';
+}
+
+export const MCP_VERSION = readPackageVersion();
 
 export interface ApiResponse<T = unknown> {
   data: T;
@@ -82,6 +96,36 @@ export interface Post {
   destinations: PostDestination[];
   created_at: string;
   updated_at: string;
+}
+
+export interface BestTimeSlot {
+  day_of_week: number;
+  iso_weekday: number;
+  hour: number;
+  time: string;
+  label: string;
+  basis: 'personal' | 'platform' | 'general';
+  score: number | null;
+  next: { date: string; time: string; iso: string };
+}
+
+export interface BestTimesResult {
+  account_id: number | null;
+  account_name: string | null;
+  platform: string;
+  basis: 'personal' | 'platform' | 'general';
+  confidence: 'high' | 'medium' | 'low' | null;
+  sample_size: number;
+  timezone: string;
+  slots: BestTimeSlot[];
+  note: string;
+}
+
+export interface BestTimesResponse {
+  timezone: string;
+  best_times: BestTimesResult[];
+  combined: BestTimesResult | null;
+  next_best: BestTimeSlot | null;
 }
 
 export interface PostResult {
@@ -159,7 +203,8 @@ export class PostEverywhereClient {
 
   // ─── Accounts ──────────────────────────────────────────────
 
-  async listAccounts(): Promise<{ accounts: Account[] }> {
+  /** next_step: present only while the workspace has no posts (a first-post suggestion). */
+  async listAccounts(): Promise<{ accounts: Account[]; next_step?: string }> {
     return this.request('GET', '/accounts');
   }
 
@@ -196,6 +241,8 @@ export class PostEverywhereClient {
      * scheduled_for - the API refuses both with conflicting_schedule_mode.
      */
     use_queue?: boolean;
+    /** The parts after content, in order. Posted as a linked thread (X, Threads, Bluesky). */
+    thread_posts?: string[];
   }): Promise<{ post_id: string; status: string; scheduled_for: string | null; accounts_count?: number; message: string; next_steps?: Record<string, string> }> {
     return this.request('POST', '/posts', body);
   }
@@ -217,6 +264,7 @@ export class PostEverywhereClient {
     account_ids?: number[];
     media_ids?: string[];
     platform_content?: Record<string, unknown>;
+    thread_posts?: string[];
   }): Promise<Post> {
     return this.request('PATCH', `/posts/${id}`, body);
   }
@@ -252,6 +300,19 @@ export class PostEverywhereClient {
   }> {
     const qs = params?.preview ? `?preview=${params.preview}` : '';
     return this.request('GET', `/queue${qs}`);
+  }
+
+  /**
+   * Best times to post for accounts (combined when several) or a platform.
+   * Read-only. `next_best` is the soonest of the top three slots.
+   */
+  async getBestTimes(params: { account_ids?: number[]; platform?: string; timezone?: string; count?: number }): Promise<BestTimesResponse> {
+    const qs = new URLSearchParams();
+    if (params.account_ids?.length) qs.set('account_ids', params.account_ids.join(','));
+    if (params.platform) qs.set('platform', params.platform);
+    if (params.timezone) qs.set('timezone', params.timezone);
+    if (params.count) qs.set('count', String(params.count));
+    return this.request('GET', `/best-times?${qs.toString()}`);
   }
 
   async listMedia(params?: { type?: string; limit?: number; offset?: number }): Promise<{ media: MediaItem[]; pagination: { limit: number; offset: number } }> {
@@ -348,6 +409,8 @@ export class PostEverywhereClient {
       team_seats: { limit: number };
     };
     stats: { posts_last_30d: number; total_posts: number };
+    /** Present only while the workspace has no posts: a first post to suggest. */
+    next_step?: string;
   }> {
     return this.request('GET', '/me');
   }

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.11.0 (2026-10-05)
+### Added
+- **`get_best_times`** (read-only): the best times to post for one or more accounts, or for a platform. Each slot has an ISO weekday, a local time, the next concrete datetime, a score (1.25 = about 25% better than a typical post) and a basis: `personal` (the account's own posts), `platform` (PostEverywhere users on that platform) or `general` (guidance, not measured). Several accounts give one combined recommendation. Backed by the new `GET /v1/best-times`.
+- **`schedule_at: "best_time"`** on `create_post` and `schedule_post`: schedules at the soonest of the accounts' top three best times, and the response says which time was picked and what it is based on.
+
+## 1.10.0 (2026-10-04)
+### Added
+- **Real threads.** `create_post` takes `thread_posts`: the parts that follow `content`, in order. The post goes out as a linked thread (each part replies to the one before) on X, Threads and Bluesky, and as follow-up messages on Telegram and Discord. Other accounts in the same post get `content` only, and the response names them. Each part is checked against the platform limit before anything is posted (X 280, or 25,000 with X Premium; Threads 500; Bluesky 300). Up to 25 parts. Not with an X Article. Works with `draft: true`: `schedule_post` publishes the whole thread.
+- `update_post` takes `thread_posts` too (`[]` turns a thread back into a single post).
+- `list_accounts` and `get_me` include a `next_step` first-post suggestion while the workspace has no posts.
+
+### Fixed
+- The server and User-Agent version are read from package.json, so they always match it (they said 1.7.0).
+
 ## 1.9.0 (2026-09-26)
 ### Added
 - **WordPress.** `connect_credential_account` connects a self-hosted WordPress site (`site_url`, `username`, `app_password`). `create_post`, `update_post` and `bulk_create_posts` publish blog posts with `platform_content.wordpress`: `content` (Markdown-style or HTML body, up to 200,000 characters) and `settings` (`title` up to 200 characters, `status` publish/draft/pending/private, `excerpt`, `slug`, `tags`, `categories`, `featuredImage` first/none). Up to 20 images and 1 video; the first image is the featured image. A bad setting or a missing title returns a clear 400.

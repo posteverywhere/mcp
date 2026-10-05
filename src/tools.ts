@@ -18,10 +18,39 @@ export interface RegisterToolsOptions {
    * Defaults to the MCP_DISABLE_IMAGE_GENERATION env var.
    */
   disableImageGeneration?: boolean;
+  /**
+   * Tool names to leave out on this surface. The ChatGPT app directory
+   * forbids tools that collect credentials (bot tokens, app passwords) or
+   * return secrets (webhook signing secrets), so the hosted /chatgpt
+   * endpoint hides those; every other surface keeps them.
+   */
+  hideTools?: readonly string[];
 }
 
-export function registerTools(server: McpServer, client: PostEverywhereClient, opts?: RegisterToolsOptions) {
+/**
+ * Tools left out of the ChatGPT app: those that collect credentials or return
+ * secrets (restricted data), and AI image generation (kept off to give the
+ * directory review the smallest possible surface; Jamie, 29 Sep 2026).
+ */
+export const CHATGPT_HIDDEN_TOOLS = [
+  'connect_credential_account',
+  'generate_image',
+  'create_webhook',
+  'update_webhook',
+  'get_webhook',
+  'list_webhooks',
+  'delete_webhook',
+  'test_webhook',
+] as const;
+
+export function registerTools(rawServer: McpServer, client: PostEverywhereClient, opts?: RegisterToolsOptions) {
   const hideImageGeneration = opts?.disableImageGeneration ?? (process.env.MCP_DISABLE_IMAGE_GENERATION === '1');
+  const hidden = new Set<string>(opts?.hideTools ?? []);
+  // Same API as McpServer.registerTool, but skips hidden tools for this surface.
+  const server = {
+    registerTool: ((name: string, config: any, cb: any) =>
+      hidden.has(name) ? undefined : rawServer.registerTool(name, config, cb)) as McpServer['registerTool'],
+  };
 
   // ─── Posting queue ─────────────────────────────────────────
 
@@ -48,13 +77,42 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     }
   );
 
+  server.registerTool(
+    'get_best_times',
+    {
+      title: 'Get Best Times to Post',
+      description: 'Find the best times to post for one or more connected accounts, or for a platform. Each slot gives the weekday (ISO, 1 = Monday), the local time in the requested timezone, the next concrete datetime, a score (1.25 = about 25% better than a typical post; null for general guidance) and a basis: "personal" (measured from that account\'s own posts), "platform" (what works for PostEverywhere users on that platform) or "general" (guidance, not measured). Pass several account_ids to get one combined recommendation for posting to all of them. next_best is the soonest of the top three slots. Use this when the user asks when to post, or before scheduling with create_post(schedule_at: "best_time"). Always tell the user the basis: never call a "platform" or "general" slot their own best time.',
+      inputSchema: {
+        account_ids: z.array(z.number()).max(20).optional().describe('Account IDs (from list_accounts). Several = one combined recommendation.'),
+        platform: z.string().optional().describe('Instead of accounts: a platform name (instagram, tiktok, linkedin, youtube, facebook, x, threads, pinterest, bluesky, telegram, discord, wordpress) for platform-wide times.'),
+        timezone: z.string().optional().describe('IANA timezone for the slots (e.g. America/New_York). Default: the user\'s profile timezone.'),
+        count: z.number().min(1).max(10).optional().describe('Slots per result (default 5).'),
+      },
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ account_ids, platform, timezone, count }: { account_ids?: number[]; platform?: string; timezone?: string; count?: number }) => {
+      if (!account_ids?.length && !platform) {
+        throw new Error('Pass account_ids (from list_accounts) or a platform name.');
+      }
+      const result = await client.getBestTimes({ account_ids, platform, timezone, count });
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+      };
+    }
+  );
+
   // ─── Accounts ──────────────────────────────────────────────
 
   server.registerTool(
     'list_accounts',
     {
       title: 'List Accounts',
-      description: 'List all connected social media accounts on PostEverywhere. Returns account IDs, platform names, usernames, and health status (whether each account can currently post). Use this to see which platforms are available before creating a post.',
+      description: 'List all connected social media accounts on PostEverywhere. Returns account IDs, platform names, usernames, and health status (whether each account can currently post). Use this to see which platforms are available before creating a post. While the workspace has no posts yet, the result ends with a next_step line: offer it to the user as an easy first post.',
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -66,7 +124,15 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     async () => {
       const result = await client.listAccounts();
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result.accounts, null, 2) }],
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result.accounts, null, 2) },
+          // Only while the workspace has no posts (the API decides; see
+          // lib/activation/first-post-hint.ts). Agents that connect and then
+          // never post are the gap this closes.
+          ...(typeof result.next_step === 'string' && result.next_step
+            ? [{ type: 'text' as const, text: `next_step: ${result.next_step}` }]
+            : []),
+        ],
       };
     }
   );
@@ -148,16 +214,18 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'create_post',
     {
       title: 'Create Post',
-      description: 'Create a social media post on PostEverywhere. Three modes: (1) PUBLISH NOW — give content + account_ids, omit scheduled_for; (2) SCHEDULE — add scheduled_for; (3) DRAFT for human review — set draft: true, which saves the post WITHOUT publishing it (it appears in the user\'s PostEverywhere app and via list_posts(status:"draft"); you then publish it with schedule_post once approved). Use draft mode whenever a human wants to check posts before they go live. Supports per-platform overrides and media. Returns the post ID, its status, and the next step to take.',
+      description: 'Create a social media post on PostEverywhere. Three modes: (1) PUBLISH NOW — give content + account_ids, omit scheduled_for; (2) SCHEDULE — add scheduled_for; (3) DRAFT for human review — set draft: true, which saves the post WITHOUT publishing it (it appears in the user\'s PostEverywhere app and via list_posts(status:"draft"); you then publish it with schedule_post once approved). Use draft mode whenever a human wants to check posts before they go live. Supports per-platform overrides and media. THREADS: put part 1 in content and the parts that follow in thread_posts; the post goes out as a real linked thread (each part replies to the one before) on X, Threads and Bluesky, and as follow-up messages on Telegram and Discord. Returns the post ID, its status, and the next step to take.',
       inputSchema: {
       content: z.string().describe('The text content of the post'),
       account_ids: z.array(z.number()).optional().describe('Social account IDs to post to (from list_accounts). REQUIRED to publish or schedule; OPTIONAL for a draft (accounts can be chosen later when you call schedule_post).'),
       scheduled_for: z.string().optional().describe('ISO 8601 datetime to schedule the post (e.g., 2026-03-15T14:00:00Z). Omit to publish immediately. When draft:true this is optional and just pre-fills the draft\'s suggested time.'),
       timezone: z.string().optional().default('UTC').describe('IANA timezone for scheduling (e.g., America/New_York)'),
-      media_ids: z.array(z.string()).optional().describe('Array of media UUIDs to attach. Get these from upload_media_from_url (recommended) or generate_image. Existing library files can be looked up with list_media.'),
+      media_ids: z.array(z.string()).optional().describe('Array of media UUIDs to attach. Get these from upload_media_from_url (recommended) or generate_image. Existing library files can be looked up with list_media. Per-platform limits are enforced, not trimmed: e.g. Pinterest takes 1 video or up to 5 images, and more is refused with a 400 (get_platform_rules lists the limits).'),
       draft: z.boolean().optional().describe('Set true to save as a DRAFT for human review instead of publishing or scheduling. The draft is NOT published until you call schedule_post on it. Review drafts with list_posts(status:"draft") or get_post.'),
+      thread_posts: z.array(z.string().min(1)).max(25).optional().describe('Make the post a THREAD. The parts that come AFTER content, in order (content is part 1). Each part is posted as a reply to the one before. Works on X, Threads and Bluesky; Telegram and Discord get them as follow-up messages; any other account in the same post gets content only (the response lists those accounts). At least one account must be X, Threads, Bluesky, Telegram or Discord. Each part must fit the platform limit: X 280 characters (25,000 with X Premium), Threads 500, Bluesky 300, Telegram 4096, Discord 2000; get_platform_rules has the numbers. Up to 25 parts. Cannot be combined with an X Article. Works with draft: true (schedule_post then publishes the whole thread). Example: content "Three things I learned this year 🧵 1/3", thread_posts ["2/3 ...", "3/3 ..."].'),
+      schedule_at: z.enum(['best_time']).optional().describe('Set to "best_time" to schedule at the next best time for these accounts: the soonest of their top three best times (see get_best_times), at least 30 minutes from now. Use it when the user says "post it at the best time" or "when it will do best". Needs account_ids. Mutually exclusive with scheduled_for and use_queue. The response says which time was picked and what it is based on; tell the user.'),
       use_queue: z.boolean().optional().describe('Set true to let the workspace posting queue choose the time: the next free slot is allocated at create time. Use this instead of scheduled_for when the user says "add it to the queue", "post it at my usual times", or "whenever is next free". Mutually exclusive with scheduled_for - sending both is rejected. Call get_queue first if you want to tell the user WHICH slot they will get.'),
-      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name (e.g. {"instagram": {...}}). Each entry may set "content" (platform-specific caption) and "contentType" (the post format for that platform). contentType values: Instagram "Post" | "Reels" | "Story" | "Trial Reel"; Facebook "Post" | "Reels" | "Story"; YouTube "Video" | "Short". Omit contentType to use the platform default (video media defaults to Reels on Instagram). Each entry may also set "settings" with platform-specific options, e.g. Pinterest {"settings": {"boardId": "...", "link": "https://...", "title": "..."}} to pick the board and destination link, YouTube {"settings": {"title": "..."}}. X: {"x": {"settings": {"made_with_ai": true, "paid_partnership": true, "community_id": "<numeric X Community id>"}}} adds X\'s disclosure labels or posts into a Community the account belongs to. X ARTICLE (long-form, X Premium accounts only): {"x": {"content": "<body: # headings, - lists, > quotes, **bold**, *italic*, [links](https://...)>", "settings": {"post_type": "article", "title": "<max 100 chars>"}}} with ONLY X account ids, up to 5 images in media_ids (the first is the cover, 2000x800 looks best; place others inline with a line ![caption](image:2), or they go at the end), no video, body up to 25,000 characters. The body also supports --- dividers, ```code``` blocks, | tables |, a line that is just an X post link (embeds it) and ![caption](https://image-url). Limited to 2 published articles per X account per 24 hours. WORDPRESS BLOG POST: {"wordpress": {"content": "<body, same formatting as X Articles; raw HTML is kept as-is>", "settings": {"title": "<max 200 chars; default = a leading # Heading, else the first line>", "status": "publish|draft|pending|private", "excerpt": "<max 1000>", "tags": ["a"], "categories": ["News"], "slug": "...", "featuredImage": "first|none"}}} with WordPress account ids (other platforms in the same call use the top-level content), up to 20 images + 1 video in media_ids (the first image is the featured image; place others inline with ![caption](image:N), or they go at the end; the video goes at the top), body up to 200,000 characters. tags/categories take arrays or a comma string (categories also take numeric ids); missing tags are created. A blog post with no title is refused with a 400.'),
+      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name (e.g. {"instagram": {...}}). Each entry may set "content" (platform-specific caption) and "contentType" (the post format for that platform). contentType values: Instagram "Post" | "Reels" | "Story" | "Trial Reel"; Facebook "Post" | "Reels" (Facebook Stories are not supported and are refused with a 400); YouTube "Video" | "Short". Omit contentType to use the platform default (video media defaults to Reels on Instagram). Each entry may also set "settings" with platform-specific options, e.g. Pinterest {"settings": {"boardId": "...", "link": "https://...", "title": "..."}} to pick the board and destination link, YouTube {"settings": {"title": "..."}}. X: {"x": {"settings": {"made_with_ai": true, "paid_partnership": true, "community_id": "<numeric X Community id>"}}} adds X\'s disclosure labels or posts into a Community the account belongs to. X ARTICLE (long-form, X Premium accounts only): {"x": {"content": "<body: # headings, - lists, > quotes, **bold**, *italic*, [links](https://...)>", "settings": {"post_type": "article", "title": "<max 100 chars>"}}} with ONLY X account ids, up to 5 images in media_ids (the first is the cover, 2000x800 looks best; place others inline with a line ![caption](image:2), or they go at the end), no video, body up to 25,000 characters. The body also supports --- dividers, ```code``` blocks, | tables |, a line that is just an X post link (embeds it) and ![caption](https://image-url). Limited to 2 published articles per X account per 24 hours. WORDPRESS BLOG POST: {"wordpress": {"content": "<body, same formatting as X Articles; raw HTML is kept as-is>", "settings": {"title": "<max 200 chars; default = a leading # Heading, else the first line>", "status": "publish|draft|pending|private", "excerpt": "<max 1000>", "tags": ["a"], "categories": ["News"], "slug": "...", "featuredImage": "first|none"}}} with WordPress account ids (other platforms in the same call use the top-level content), up to 20 images + 1 video in media_ids (the first image is the featured image; place others inline with ![caption](image:N), or they go at the end; the video goes at the top), body up to 200,000 characters. tags/categories take arrays or a comma string (categories also take numeric ids); missing tags are created. A blog post with no title is refused with a 400.'),
     },
       annotations: {
         readOnlyHint: false,
@@ -166,7 +234,17 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
         openWorldHint: true,
       },
     },
-    async ({ content, account_ids, scheduled_for, timezone, media_ids, draft, platform_content, use_queue }) => {
+    async (args) => {
+      const { content, account_ids, timezone, media_ids, draft, platform_content, use_queue, thread_posts, schedule_at } = args;
+      let { scheduled_for } = args;
+      let picked: Awaited<ReturnType<typeof resolveBestTime>> | null = null;
+      if (schedule_at === 'best_time') {
+        if (scheduled_for || use_queue) {
+          throw new Error('schedule_at: "best_time" picks the time itself: do not also send scheduled_for or use_queue.');
+        }
+        picked = await resolveBestTime(client, account_ids, timezone);
+        scheduled_for = picked.scheduled_for;
+      }
       const result = await client.createPost({
         content,
         account_ids,
@@ -176,9 +254,13 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
         draft,
         platform_content,
         use_queue,
+        ...(thread_posts && thread_posts.length > 0 ? { thread_posts } : {}),
       });
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+          ...(picked ? [{ type: 'text' as const, text: `best_time: scheduled for ${picked.label}. ${picked.basis_note}` }] : []),
+        ],
       };
     }
   );
@@ -192,6 +274,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       post_id: z.string().uuid().describe('The UUID of the draft to publish (from create_post or list_posts)'),
       scheduled_for: z.string().optional().describe('ISO 8601 datetime to schedule for (e.g., 2026-06-20T14:00:00Z). Provide this OR publish_now.'),
       publish_now: z.boolean().optional().describe('Set true to publish the draft immediately instead of scheduling it.'),
+      schedule_at: z.enum(['best_time']).optional().describe('Set to "best_time" to schedule the draft at the next best time for its accounts (the soonest of their top three, see get_best_times). Instead of scheduled_for or publish_now.'),
       account_ids: z.array(z.number()).optional().describe('Optional: accounts to publish to, overriding the draft\'s saved targets.'),
       timezone: z.string().optional().describe('IANA timezone for display (does not change when the post fires).'),
     },
@@ -202,10 +285,26 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
         openWorldHint: true,
       },
     },
-    async ({ post_id, scheduled_for, publish_now, account_ids, timezone }) => {
+    async ({ post_id, scheduled_for, publish_now, account_ids, timezone, schedule_at }: { post_id: string; scheduled_for?: string; publish_now?: boolean; account_ids?: number[]; timezone?: string; schedule_at?: 'best_time' }) => {
+      let picked: Awaited<ReturnType<typeof resolveBestTime>> | null = null;
+      if (schedule_at === 'best_time') {
+        if (scheduled_for || publish_now) {
+          throw new Error('schedule_at: "best_time" picks the time itself: do not also send scheduled_for or publish_now.');
+        }
+        let ids = account_ids;
+        if (!ids?.length) {
+          const draft = await client.getPost(post_id);
+          ids = [...new Set((draft.destinations || []).map(d => d.account_id).filter((n): n is number => typeof n === 'number'))];
+        }
+        picked = await resolveBestTime(client, ids, timezone);
+        scheduled_for = picked.scheduled_for;
+      }
       const result = await client.schedulePost(post_id, { scheduled_for, publish_now, account_ids, timezone });
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+          ...(picked ? [{ type: 'text' as const, text: `best_time: scheduled for ${picked.label}. ${picked.basis_note}` }] : []),
+        ],
       };
     }
   );
@@ -221,7 +320,8 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       scheduled_for: z.string().optional().describe('New ISO 8601 datetime to schedule the post'),
       timezone: z.string().optional().describe('New IANA timezone for scheduling'),
       account_ids: z.array(z.number()).optional().describe('New array of social account IDs to post to'),
-      media_ids: z.array(z.string()).optional().describe('New array of media UUIDs to attach. Get these from upload_media_from_url or generate_image.'),
+      media_ids: z.array(z.string()).optional().describe('New array of media UUIDs to attach. Get these from upload_media_from_url or generate_image. The same per-platform limits as create_post apply (e.g. Pinterest: up to 5 images).'),
+      thread_posts: z.array(z.string().min(1)).max(25).optional().describe('Replace the thread parts that follow content (same as create_post). Send [] to turn a thread back into a single post.'),
       platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name, same shape as create_post. Use this to correct a queued post, e.g. set the Pinterest board and destination link: {"pinterest": {"settings": {"boardId": "...", "link": "https://..."}}}. Settings merge into the post before it publishes. For an X Article, set {"x": {"settings": {"post_type": "article", "title": "..."}}}. For a WordPress blog post, set {"wordpress": {"content": "...", "settings": {"title": "...", "status": "draft", "tags": ["a"]}}}.'),
     },
       annotations: {
@@ -231,7 +331,8 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
         openWorldHint: true,
       },
     },
-    async ({ post_id, content, scheduled_for, timezone, account_ids, media_ids, platform_content }) => {
+    async (args) => {
+      const { post_id, content, scheduled_for, timezone, account_ids, media_ids, platform_content, thread_posts } = args;
       const result = await client.updatePost(post_id, {
         content,
         scheduled_for,
@@ -239,6 +340,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
         account_ids,
         media_ids,
         platform_content,
+        ...(thread_posts !== undefined ? { thread_posts } : {}),
       });
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
@@ -487,7 +589,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'get_me',
     {
       title: 'Get Workspace Info',
-      description: "Get the signed-in PostEverywhere account: the user, the workspace, the granted scopes, the organization's plan, and what is left on each quota (accounts, AI credits, storage). Useful at the start of a conversation to learn the organization_id, scopes and quota state.",
+      description: "Get the signed-in PostEverywhere account: the user, the workspace, the granted scopes, the organization's plan, and what is left on each quota (accounts, AI credits, storage). Useful at the start of a conversation to learn the organization_id, scopes and quota state. While the workspace has no posts yet, next_step suggests an easy first post to offer the user.",
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -508,7 +610,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'get_platform_rules',
     {
       title: 'Get Platform Rules',
-      description: "Get the per-platform publishing limits PostEverywhere enforces: character limit, image and video constraints (size, dimensions, duration, formats), and supported features (threads, carousels, reels, alt text, link cards, blog posts). WordPress also lists its blog post fields under platforms.wordpress.blog. Call this BEFORE composing a post for an unfamiliar platform, or when a post was rejected for length or media format — it is the difference between one correct call and a failed publish. Server-authoritative and cheap: the values are static per deploy and cached, so a platform added server-side appears here with no update on your side. Takes no arguments and returns every platform at once.",
+      description: "Get the per-platform publishing limits PostEverywhere enforces: character limit, image and video constraints (size, dimensions, duration, formats), and supported features (threads, carousels, reels, alt text, blog posts). WordPress also lists its blog post fields under platforms.wordpress.blog. Call this BEFORE composing a post for an unfamiliar platform, or when a post was rejected for length or media format — it is the difference between one correct call and a failed publish. Server-authoritative and cheap: the values are static per deploy and cached, so a platform added server-side appears here with no update on your side. Takes no arguments and returns every platform at once.",
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -825,7 +927,7 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
     'create_webhook',
     {
       title: 'Create Webhook',
-      description: "Create a webhook subscription on PostEverywhere. PostEverywhere will POST event payloads to the URL whenever a subscribed event occurs (post.published, post.failed, account.reconnect_needed, etc). Each request is signed with HMAC-SHA256 via the X-PostEverywhere-Signature header — verify it against the returned secret. The secret is shown ONLY ONCE in this response. Available events: post.scheduled, post.publishing, post.published, post.failed, post.partially_failed, post.updated, post.deleted, account.connected, account.disconnected, account.reconnect_needed, media.uploaded, media.deleted.",
+      description: "Create a webhook subscription on PostEverywhere. PostEverywhere will POST event payloads to the URL whenever a subscribed event occurs (post.published, post.failed, account.reconnect_needed, etc). Each request is signed with HMAC-SHA256 via the X-PostEverywhere-Signature header — verify it against the returned secret. The secret is shown ONLY ONCE in this response. Available events: post.scheduled, post.publishing, post.published, post.failed, post.partially_failed, post.warning, post.updated, post.deleted, account.connected, account.disconnected, account.reconnect_needed, media.uploaded, media.deleted.",
       inputSchema: {
       url: z.string().url().describe('HTTPS URL where events will be POSTed (must be public)'),
       events: z.array(z.string()).min(1).describe('Array of event names to subscribe to'),
@@ -965,4 +1067,26 @@ export function registerTools(server: McpServer, client: PostEverywhereClient, o
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }
   );
+}
+
+/**
+ * schedule_at: "best_time" → a concrete ISO datetime, via GET /v1/best-times.
+ * Resolved in the MCP server, not the API, so POST /v1/posts keeps one meaning
+ * for scheduled_for and the agent is told exactly which time was chosen.
+ */
+async function resolveBestTime(client: PostEverywhereClient, accountIds: number[] | undefined, timezone: string | undefined) {
+  if (!accountIds?.length) {
+    throw new Error('schedule_at: "best_time" needs account_ids (from list_accounts), so it knows whose best times to use.');
+  }
+  const bt = await client.getBestTimes({ account_ids: accountIds, timezone, count: 5 });
+  const slot = bt.next_best;
+  if (!slot) {
+    throw new Error('No best time could be found for these accounts. Pick a time with scheduled_for instead.');
+  }
+  const basis_note = slot.basis === 'personal'
+    ? 'This is one of these accounts\' own best times.'
+    : slot.basis === 'platform'
+      ? 'This is a popular time for PostEverywhere users on this platform (the accounts do not have enough posts with stats for their own times yet).'
+      : 'This is general guidance, not measured from any audience.';
+  return { scheduled_for: slot.next.iso, label: `${slot.label} (${slot.next.date} ${slot.next.time} ${bt.timezone})`, basis: slot.basis, basis_note };
 }
