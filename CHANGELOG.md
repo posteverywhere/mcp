@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.13.0 (2026-10-19)
+### Added
+- **Google Business Profile** (`google_business`). `create_connect_link` connects it (the owner signs in with the Google account that owns or manages the business, then chooses which businesses to add). `create_post`, `update_post` and `bulk_create_posts` take `platform_content.google_business.settings`: `post_type` (update, event, offer), `button` (book, order, shop, learn_more, sign_up, call) with `button_url`, `event_title`, `start_date`, `end_date`, and for offers `coupon_code`, `redeem_url`, `terms`. Text up to 1500 characters, at most 1 photo, no video. `get_platform_rules` lists the fields under `platforms.google_business.local_post`. `generate_caption` and `list_posts` accept `google_business`.
+
+## 1.12.0 (2026-10-09)
+### Added
+- **`get_brand`** (read-only): the workspace's Brand Kit, built from the business website. What the business does, products, audience, voice (with an example sentence), language, rules (each says whether PostEverywhere enforces it), banned words, required hashtags, colours and fonts. Backed by the new `GET /v1/brand`. Not on the ChatGPT app surface yet.
+
+### Changed
+- `generate_caption` writes in the workspace's brand automatically when one is set up. The API takes `brand_id`: `"none"` for no brand, or a brand id from `get_brand`.
+- `generate_image` takes `add_logo`: the workspace's real logo from its Brand Kit is stamped onto the finished image (exact, not redrawn by the model). The response says `logo_added`.
+
 ## 1.11.0 (2026-10-05)
 ### Added
 - **`get_best_times`** (read-only): the best times to post for one or more accounts, or for a platform. Each slot has an ISO weekday, a local time, the next concrete datetime, a score (1.25 = about 25% better than a typical post) and a basis: `personal` (the account's own posts), `platform` (PostEverywhere users on that platform) or `general` (guidance, not measured). Several accounts give one combined recommendation. Backed by the new `GET /v1/best-times`.

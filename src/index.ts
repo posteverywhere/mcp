@@ -54,7 +54,7 @@ const baseUrl =
   process.env.POSTEVERYWHERE_API_URL ||
   'https://app.posteverywhere.ai';
 
-const client = new PostEverywhereClient({ baseUrl, apiKey });
+const client = new PostEverywhereClient({ baseUrl, apiKey, surface: 'local' });
 const server = new McpServer({
   name: 'posteverywhere',
   version: pkg.version,

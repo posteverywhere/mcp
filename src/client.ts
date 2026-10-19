@@ -6,6 +6,7 @@
  */
 
 import { createRequire } from 'node:module';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 // THE version, read from package.json at runtime so it can't drift. The MCP
 // server info and the API User-Agent both use it. Hardcoded copies drifted to
@@ -23,6 +24,13 @@ export function readPackageVersion(): string {
 }
 
 export const MCP_VERSION = readPackageVersion();
+
+/**
+ * The MCP tool being run, so each API call can say which tool made it
+ * (X-PE-MCP-Tool). The customer sees this in Developers > Logs ("create_post"
+ * instead of "POST /v1/posts"). A label only: it grants nothing.
+ */
+export const currentTool = new AsyncLocalStorage<string>();
 
 export interface ApiResponse<T = unknown> {
   data: T;
@@ -160,10 +168,12 @@ export interface MediaItem {
 export class PostEverywhereClient {
   private baseUrl: string;
   private apiKey: string;
+  private surface?: string;
 
-  constructor(opts: { baseUrl?: string; apiKey: string }) {
+  constructor(opts: { baseUrl?: string; apiKey: string; surface?: string }) {
     this.baseUrl = (opts.baseUrl ?? 'https://app.posteverywhere.ai').replace(/\/$/, '');
     this.apiKey = opts.apiKey;
+    this.surface = opts.surface;
   }
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -176,6 +186,8 @@ export class PostEverywhereClient {
         // Not a secret; lets us track MCP usage without touching this
         // zero-secret container's security model. Keep in step with package version.
         'User-Agent': `posteverywhere-mcp/${MCP_VERSION}`,
+        ...(currentTool.getStore() ? { 'X-PE-MCP-Tool': currentTool.getStore() as string } : {}),
+        ...(this.surface ? { 'X-PE-MCP-Surface': this.surface } : {}),
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -287,6 +299,15 @@ export class PostEverywhereClient {
 
   // ─── Media ─────────────────────────────────────────────────
 
+  /** The workspace's Brand Kit (null when none is set up). */
+  async getBrand(): Promise<{
+    brand: Record<string, unknown> | null;
+    brands: Array<{ id: string; name: string; is_default: boolean }>;
+    message: string;
+  }> {
+    return this.request('GET', '/brand');
+  }
+
   /**
    * Preview the workspace posting queue: its slots and the next openings.
    * The upcoming list is a FORECAST, not a reservation - a slot is only
@@ -378,7 +399,8 @@ export class PostEverywhereClient {
     prompt: string;
     aspect_ratio?: string;
     model?: string;
-  }): Promise<{ media_id: string; model: string; aspect_ratio: string; credits_used: number; credits_remaining: number; message: string }> {
+    add_logo?: boolean;
+  }): Promise<{ media_id: string; model: string; aspect_ratio: string; credits_used: number; credits_remaining: number; message: string; logo_added?: boolean }> {
     return this.request('POST', '/ai/generate-image', body);
   }
 

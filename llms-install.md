@@ -1,6 +1,6 @@
 # Installing the PostEverywhere MCP server (for AI agents such as Cline)
 
-PostEverywhere is a social media scheduler. This MCP server lets an AI agent write, schedule and publish posts to Instagram, TikTok, YouTube, LinkedIn, Facebook, X, Threads, Pinterest, Bluesky, Telegram, Discord and WordPress, plan a content calendar, cross-post video, and find and retry failed posts. Website: https://posteverywhere.ai · Docs: https://posteverywhere.ai/mcp
+PostEverywhere is a social media scheduler. This MCP server lets an AI agent write, schedule and publish posts to Instagram, TikTok, YouTube, LinkedIn, Facebook, X, Threads, Pinterest, Bluesky, Telegram, Discord, WordPress and Google Business Profile, plan a content calendar, cross-post video, and find and retry failed posts. Website: https://posteverywhere.ai · Docs: https://posteverywhere.ai/mcp
 
 There are two ways to connect. Option A needs no key and nothing installed.
 

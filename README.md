@@ -8,7 +8,7 @@ mcp-name: io.github.posteverywhere/mcp
 [![GitHub stars](https://img.shields.io/github/stars/posteverywhere/mcp?style=flat-square)](https://github.com/posteverywhere/mcp)
 [![Glama quality score](https://glama.ai/mcp/servers/posteverywhere/mcp/badges/score.svg)](https://glama.ai/mcp/servers/posteverywhere/mcp)
 
-Official [Model Context Protocol](https://modelcontextprotocol.io) server for [PostEverywhere](https://posteverywhere.ai) — let [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), [Claude Desktop](https://claude.ai/download), [ChatGPT](https://chatgpt.com) (via the [hosted connector](https://posteverywhere.ai/agents)), [Cursor](https://cursor.sh), [OpenAI Codex](https://openai.com/codex/), and other MCP-compatible AI clients **schedule and publish posts to 12 platforms: Instagram, TikTok, YouTube, LinkedIn, Facebook, X (Twitter), Threads, Pinterest, Bluesky, Telegram, Discord and WordPress** using natural language.
+Official [Model Context Protocol](https://modelcontextprotocol.io) server for [PostEverywhere](https://posteverywhere.ai) — let [Claude Code](https://docs.claude.com/en/docs/claude-code/overview), [Claude Desktop](https://claude.ai/download), [ChatGPT](https://chatgpt.com) (via the [hosted connector](https://posteverywhere.ai/agents)), [Cursor](https://cursor.sh), [OpenAI Codex](https://openai.com/codex/), and other MCP-compatible AI clients **schedule and publish posts to 13 platforms: Instagram, TikTok, YouTube, LinkedIn, Facebook, X (Twitter), Threads, Pinterest, Bluesky, Telegram, Discord, WordPress and Google Business Profile** using natural language.
 
 > 💡 **Building a programmatic integration?** Use the companion [`@posteverywhere/sdk`](https://www.npmjs.com/package/@posteverywhere/sdk) Node.js SDK instead — full TypeScript types, retry handling, error classes.
 
@@ -190,13 +190,13 @@ Each natural-language prompt maps to one or more MCP tool calls — the agent fi
 
 ## Supported Platforms
 
-All 12 platforms work on every plan:
+All 13 platforms work on every plan:
 
-- **[Instagram](https://posteverywhere.ai/instagram-scheduler)** — feed, reels, stories, carousels
-- **[TikTok](https://posteverywhere.ai/tiktok-scheduler)** — videos, photo carousels
-- **[YouTube](https://posteverywhere.ai/youtube-scheduler)** — videos with thumbnails, descriptions, tags
-- **[LinkedIn](https://posteverywhere.ai/linkedin-scheduler)** — text, images, video, document carousels
-- **[Facebook](https://posteverywhere.ai/facebook-scheduler)** — pages, video, reels, multi-image
+- **[Instagram](https://posteverywhere.ai/instagram)** — feed, reels, stories, carousels
+- **[TikTok](https://posteverywhere.ai/tiktok)** — videos, photo carousels
+- **[YouTube](https://posteverywhere.ai/youtube)** — videos with thumbnails, descriptions, tags
+- **[LinkedIn](https://posteverywhere.ai/linkedin)** — text, images, video, document carousels
+- **[Facebook](https://posteverywhere.ai/facebook)** — pages, video, reels, multi-image
 - **X (Twitter)** — text, threads, media (tier-aware char limits)
 - **Threads** — text and media posts
 - **Pinterest** — pins to boards
@@ -204,6 +204,7 @@ All 12 platforms work on every plan:
 - **Telegram** — posts to channels and groups
 - **Discord** — posts to server channels
 - **WordPress** — blog posts (self-hosted and WordPress.com)
+- **[Google Business Profile](https://posteverywhere.ai/google-business-profile)** — updates, events and offers on your Google Search and Maps listing (one photo, optional button)
 
 ## Configuration
 
@@ -283,11 +284,11 @@ Hitting a 429? The MCP server returns a clear `rate_limit_exceeded` code with `r
 
 PostEverywhere is the backend for all of these — every plan includes every platform:
 
-- 📷 [Instagram Scheduler](https://posteverywhere.ai/instagram-scheduler) — feed posts, reels, stories, carousels
-- 🎵 [TikTok Scheduler](https://posteverywhere.ai/tiktok-scheduler) — videos, photo carousels, full content disclosure flags
-- 📺 [YouTube Scheduler](https://posteverywhere.ai/youtube-scheduler) — videos with thumbnails, tags, descriptions, privacy controls
-- 💼 [LinkedIn Scheduler](https://posteverywhere.ai/linkedin-scheduler) — personal + Company Page posts, document carousels, video
-- 👍 [Facebook Scheduler](https://posteverywhere.ai/facebook-scheduler) — Pages, Reels, video, multi-image carousels
+- 📷 [Instagram Scheduler](https://posteverywhere.ai/instagram) — feed posts, reels, stories, carousels
+- 🎵 [TikTok Scheduler](https://posteverywhere.ai/tiktok) — videos, photo carousels, full content disclosure flags
+- 📺 [YouTube Scheduler](https://posteverywhere.ai/youtube) — videos with thumbnails, tags, descriptions, privacy controls
+- 💼 [LinkedIn Scheduler](https://posteverywhere.ai/linkedin) — personal + Company Page posts, document carousels, video
+- 👍 [Facebook Scheduler](https://posteverywhere.ai/facebook) — Pages, Reels, video, multi-image carousels
 - 🐦 X (Twitter), Threads, Pinterest, Bluesky, Telegram, Discord and WordPress, all included on every plan
 
 ## Related
@@ -309,4 +310,4 @@ MIT — see [LICENSE](LICENSE).
 
 ---
 
-Built by the team at [PostEverywhere](https://posteverywhere.ai). The smarter way to schedule social media to [Instagram](https://posteverywhere.ai/instagram-scheduler), [TikTok](https://posteverywhere.ai/tiktok-scheduler), [YouTube](https://posteverywhere.ai/youtube-scheduler), [LinkedIn](https://posteverywhere.ai/linkedin-scheduler), [Facebook](https://posteverywhere.ai/facebook-scheduler), X, Threads, Pinterest, Bluesky, Telegram, Discord and WordPress, now with native [MCP support](https://modelcontextprotocol.io) for AI agents.
+Built by the team at [PostEverywhere](https://posteverywhere.ai). The smarter way to schedule social media to [Instagram](https://posteverywhere.ai/instagram), [TikTok](https://posteverywhere.ai/tiktok), [YouTube](https://posteverywhere.ai/youtube), [LinkedIn](https://posteverywhere.ai/linkedin), [Facebook](https://posteverywhere.ai/facebook), X, Threads, Pinterest, Bluesky, Telegram, Discord and WordPress, now with native [MCP support](https://modelcontextprotocol.io) for AI agents.
