@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.1 (2026-10-20)
+### Fixed
+- `create_media_upload` now says how to send each file: follow the `protocol` in the response. "put" (videos and PDFs): PUT the raw bytes with the same Content-Type. "multipart-form" (images): POST a multipart form with the file in a field named `file`. It used to say PUT for everything, which fails for images.
+- `bulk_create_posts` resolves `schedule_at: "best_time"` for each post; `delete_media` takes `force`; tool and webhook descriptions match what the API does (`timezone` is display-only, `update_post` merges settings, first comment works on X only, only webhook events that fire are listed).
+
 ## 1.14.0 (2026-10-20)
 ### Added
 - **Every YouTube upload setting YouTube's API lets apps set**, in `platform_content.youtube.settings` (camelCase or snake_case): `title`, `description`, `tags`, `categoryId`, `privacyStatus`, `madeForKids`, `containsSyntheticMedia` (AI disclosure), `notifySubscribers`, `license`, `embeddable`, `publicStatsViewable`, `defaultLanguage`. Playlists and a first comment are not available yet. The `create_post` description lists them all, and `get_platform_rules` returns them under `platforms.youtube.settings`.

@@ -411,8 +411,12 @@ export class PostEverywhereClient {
     return this.request('GET', `/media/${id}`);
   }
 
-  async deleteMedia(id: string): Promise<{ deleted: boolean; id: string }> {
-    return this.request('DELETE', `/media/${id}`);
+  /**
+   * force: true deletes a file that scheduled posts still use (the API then cancels those
+   * posts, marking them failed). Without it the API answers 409 media_in_use.
+   */
+  async deleteMedia(id: string, opts?: { force?: boolean }): Promise<{ deleted: boolean; id: string; cancelled_post_count?: number }> {
+    return this.request('DELETE', `/media/${id}${opts?.force ? '?force=true' : ''}`);
   }
 
   // ─── AI ───────────────────────────────────────────────────
