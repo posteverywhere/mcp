@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.14.0 (2026-10-20)
+### Added
+- **Every YouTube upload setting YouTube's API lets apps set**, in `platform_content.youtube.settings` (camelCase or snake_case): `title`, `description`, `tags`, `categoryId`, `privacyStatus`, `madeForKids`, `containsSyntheticMedia` (AI disclosure), `notifySubscribers`, `license`, `embeddable`, `publicStatsViewable`, `defaultLanguage`. Playlists and a first comment are not available yet. The `create_post` description lists them all, and `get_platform_rules` returns them under `platforms.youtube.settings`.
+- Invalid YouTube settings are refused with `400 youtube_settings_invalid`. Settings only YouTube Studio can change (age restriction, paid promotion, comments, Shorts remixing, caption certification) are accepted and explained in the response's `notes`.
+- **YouTube thumbnails and video covers**: `create_post` takes `cover_photo` (`{ media_id }` or `{ url }`). On YouTube it is the custom thumbnail (verified channels only); Instagram Reels, Facebook and LinkedIn videos use it as the cover.
+- **Every platform's settings described** in `create_post`: TikTok (privacy, comments, duet, stitch, branded content, AI label, cover frame), X (polls, reply settings, quote posts, image alt text, first comment), Facebook (link, Reel or video, place, call to action), LinkedIn (visibility, disable reshare), Threads (topic, link), Pinterest (description, alt text, board section), Bluesky (alt text, language, reply control, content labels), Telegram, Discord and WordPress options. First comment works on X only.
+- `create_post` takes `campaign_id` and `request_approval` (with `draft: true`).
+- New tools: `approve_post`, `request_post_changes`, `create_media_upload` and `complete_media_upload` (local files and LinkedIn PDF documents). `list_posts` takes an `approval` filter.
+### Changed
+- Threads chains are not offered: they need a Threads permission that is still in review. `thread_posts` works on X and Bluesky, and as follow-up messages on Telegram and Discord.
+- `create_connect_link` no longer points ChatGPT at a tool it does not have.
+
+
 ## 1.13.0 (2026-10-19)
 ### Added
 - **Google Business Profile** (`google_business`). `create_connect_link` connects it (the owner signs in with the Google account that owns or manages the business, then chooses which businesses to add). `create_post`, `update_post` and `bulk_create_posts` take `platform_content.google_business.settings`: `post_type` (update, event, offer), `button` (book, order, shop, learn_more, sign_up, call) with `button_url`, `event_title`, `start_date`, `end_date`, and for offers `coupon_code`, `redeem_url`, `terms`. Text up to 1500 characters, at most 1 photo, no video. `get_platform_rules` lists the fields under `platforms.google_business.local_post`. `generate_caption` and `list_posts` accept `google_business`.

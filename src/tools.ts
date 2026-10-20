@@ -204,6 +204,7 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       status: z.enum(['scheduled', 'published', 'draft']).optional().describe('Filter by post status'),
       platform: z.string().optional().describe('Filter by platform (e.g., instagram, linkedin, x, wordpress, google_business)'),
       limit: z.number().min(1).max(100).optional().default(20).describe('Number of posts to return'),
+      approval: z.enum(['pending', 'approved', 'changes_requested']).optional().describe('Approval workflow filter: "pending" lists posts waiting for a reviewer, "changes_requested" those sent back to their author.'),
     },
       annotations: {
         readOnlyHint: true,
@@ -212,8 +213,8 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
         openWorldHint: false,
       },
     },
-    async ({ status, platform, limit }) => {
-      const result = await client.listPosts({ status, platform, limit });
+    async ({ status, platform, limit, approval }) => {
+      const result = await client.listPosts({ status, platform, limit, approval });
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result.posts, null, 2) }],
       };
@@ -247,7 +248,7 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
     'create_post',
     {
       title: 'Create Post',
-      description: 'Create a social media post on PostEverywhere. Three modes: (1) PUBLISH NOW — give content + account_ids, omit scheduled_for; (2) SCHEDULE — add scheduled_for; (3) DRAFT for human review — set draft: true, which saves the post WITHOUT publishing it (it appears in the user\'s PostEverywhere app and via list_posts(status:"draft"); you then publish it with schedule_post once approved). Use draft mode whenever a human wants to check posts before they go live. Supports per-platform overrides and media. THREADS: put part 1 in content and the parts that follow in thread_posts; the post goes out as a real linked thread (each part replies to the one before) on X, Threads and Bluesky, and as follow-up messages on Telegram and Discord. Returns the post ID, its status, and the next step to take. Irreversible in publish-now and schedule modes: a post that a social network has published stays public, and PostEverywhere cannot recall it.',
+      description: 'Create a social media post on PostEverywhere. Three modes: (1) PUBLISH NOW — give content + account_ids, omit scheduled_for; (2) SCHEDULE — add scheduled_for; (3) DRAFT for human review — set draft: true, which saves the post WITHOUT publishing it (it appears in the user\'s PostEverywhere app and via list_posts(status:"draft"); you then publish it with schedule_post once approved). Use draft mode whenever a human wants to check posts before they go live. Supports per-platform overrides and media. THREADS: put part 1 in content and the parts that follow in thread_posts; the post goes out as a real linked thread (each part replies to the one before) on X and Bluesky, and as follow-up messages on Telegram and Discord (Threads chains are not available yet: a Threads account gets part 1 only). Returns the post ID, its status, and the next step to take. Irreversible in publish-now and schedule modes: a post that a social network has published stays public, and PostEverywhere cannot recall it.',
       inputSchema: {
       content: z.string().describe('The text content of the post'),
       account_ids: z.array(z.number()).optional().describe('Social account IDs to post to (from list_accounts). REQUIRED to publish or schedule; OPTIONAL for a draft (accounts can be chosen later when you call schedule_post).'),
@@ -255,10 +256,16 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       timezone: z.string().optional().default('UTC').describe('IANA timezone for scheduling (e.g., America/New_York)'),
       media_ids: z.array(z.string()).optional().describe('Array of media UUIDs to attach. Get these from upload_media_from_url (recommended) or generate_image. Existing library files can be looked up with list_media. Per-platform limits are enforced, not trimmed: e.g. Pinterest takes 1 video or up to 5 images, and more is refused with a 400 (get_platform_rules lists the limits).'),
       draft: z.boolean().optional().describe('Set true to save as a DRAFT for human review instead of publishing or scheduling. The draft is NOT published until you call schedule_post on it. Review drafts with list_posts(status:"draft") or get_post.'),
-      thread_posts: z.array(z.string().min(1)).max(25).optional().describe('Make the post a THREAD. The parts that come AFTER content, in order (content is part 1). Each part is posted as a reply to the one before. Works on X, Threads and Bluesky; Telegram and Discord get them as follow-up messages; any other account in the same post gets content only (the response lists those accounts). At least one account must be X, Threads, Bluesky, Telegram or Discord. Each part must fit the platform limit: X 280 characters (25,000 with X Premium), Threads 500, Bluesky 300, Telegram 4096, Discord 2000; get_platform_rules has the numbers. Up to 25 parts. Cannot be combined with an X Article. Works with draft: true (schedule_post then publishes the whole thread). Example: content "Three things I learned this year 🧵 1/3", thread_posts ["2/3 ...", "3/3 ..."].'),
+      thread_posts: z.array(z.string().min(1)).max(25).optional().describe('Make the post a THREAD. The parts that come AFTER content, in order (content is part 1). Each part is posted as a reply to the one before. Works on X and Bluesky; Telegram and Discord get them as follow-up messages; Threads chains are not available yet (a Threads account gets part 1 only); any other account in the same post gets content only (the response lists those accounts). At least one account must be X, Bluesky, Telegram or Discord. Each part must fit the platform limit: X 280 characters (25,000 with X Premium), Bluesky 300, Telegram 4096, Discord 2000; get_platform_rules has the numbers. Up to 25 parts. Cannot be combined with an X Article. Works with draft: true (schedule_post then publishes the whole thread). Example: content "Three things I learned this year 🧵 1/3", thread_posts ["2/3 ...", "3/3 ..."].'),
+      campaign_id: z.number().int().optional().describe('Put the post in a campaign (id from create_campaign or list_campaigns).'),
+      request_approval: z.boolean().optional().describe('With draft: true, send the draft to the workspace\'s reviewers for approval instead of leaving it as a plain draft. Reviewers use approve_post or request_post_changes; list_posts(approval:"pending") shows the queue.'),
+      cover_photo: z.object({
+        media_id: z.string().optional().describe('An IMAGE media id from upload_media_from_url (recommended).'),
+        url: z.string().url().optional().describe('Or a public https link to a JPG or PNG.'),
+      }).optional().describe('Cover image for a VIDEO post. On YouTube it becomes the video\'s custom THUMBNAIL (YouTube only allows custom thumbnails on verified channels: youtube.com/verify; 1280x720 JPG or PNG is best). Instagram Reels, Facebook videos and LinkedIn videos use it as the cover. TikTok does not take a cover image (pick a frame with platform_content.tiktok.settings.videoCoverTimestamp in milliseconds). Give media_id or url. For one platform only, set platform_content.<platform>.settings.coverPhotoUrl instead.'),
       schedule_at: z.enum(['best_time']).optional().describe('Set to "best_time" to schedule at the next best time for these accounts: the soonest of their top three best times (see get_best_times), at least 30 minutes from now. Use it when the user says "post it at the best time" or "when it will do best". Needs account_ids. Mutually exclusive with scheduled_for and use_queue. The response says which time was picked and what it is based on; tell the user.'),
       use_queue: z.boolean().optional().describe('Set true to let the workspace posting queue choose the time: the next free slot is allocated at create time. Use this instead of scheduled_for when the user says "add it to the queue", "post it at my usual times", or "whenever is next free". Mutually exclusive with scheduled_for - sending both is rejected. Call get_queue first if you want to tell the user WHICH slot they will get.'),
-      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name (e.g. {"instagram": {...}}). Each entry may set "content" (platform-specific caption) and "contentType" (the post format for that platform). contentType values: Instagram "Post" | "Reels" | "Story" | "Trial Reel"; Facebook "Post" | "Reels" (Facebook Stories are not supported and are refused with a 400); YouTube "Video" | "Short". Omit contentType to use the platform default (video media defaults to Reels on Instagram). Each entry may also set "settings" with platform-specific options, e.g. Pinterest {"settings": {"boardId": "...", "link": "https://...", "title": "..."}} to pick the board and destination link, YouTube {"settings": {"title": "..."}}. X: {"x": {"settings": {"made_with_ai": true, "paid_partnership": true, "community_id": "<numeric X Community id>"}}} adds X\'s disclosure labels or posts into a Community the account belongs to. X ARTICLE (long-form, X Premium accounts only): {"x": {"content": "<body: # headings, - lists, > quotes, **bold**, *italic*, [links](https://...)>", "settings": {"post_type": "article", "title": "<max 100 chars>"}}} with ONLY X account ids, up to 5 images in media_ids (the first is the cover, 2000x800 looks best; place others inline with a line ![caption](image:2), or they go at the end), no video, body up to 25,000 characters. The body also supports --- dividers, ```code``` blocks, | tables |, a line that is just an X post link (embeds it) and ![caption](https://image-url). Limited to 2 published articles per X account per 24 hours. WORDPRESS BLOG POST: {"wordpress": {"content": "<body, same formatting as X Articles; raw HTML is kept as-is>", "settings": {"title": "<max 200 chars; default = a leading # Heading, else the first line>", "status": "publish|draft|pending|private", "excerpt": "<max 1000>", "tags": ["a"], "categories": ["News"], "slug": "...", "featuredImage": "first|none"}}} with WordPress account ids (other platforms in the same call use the top-level content), up to 20 images + 1 video in media_ids (the first image is the featured image; place others inline with ![caption](image:N), or they go at the end; the video goes at the top), body up to 200,000 characters. tags/categories take arrays or a comma string (categories also take numeric ids); missing tags are created. A blog post with no title is refused with a 400. GOOGLE BUSINESS PROFILE POST (google_business): {"google_business": {"content": "<optional text for Google only, max 1500 chars>", "settings": {"post_type": "update|event|offer", "button": "none|book|order|shop|learn_more|sign_up|call", "button_url": "https://...", "event_title": "<max 58>", "start_date": "YYYY-MM-DD or YYYY-MM-DDTHH:mm", "end_date": "...", "coupon_code": "...", "redeem_url": "https://...", "terms": "..."}}}. Text up to 1500 characters, at most 1 photo (JPG or PNG), no video. button_url is required for every button except call. Event and offer posts need event_title, start_date and end_date (business local time). Offer posts have no button. Do not put phone numbers in the text: Google rejects those posts. An invalid Google Business Profile post is refused with a 400.'),
+      platform_content: z.record(z.any()).optional().describe('Per-platform overrides keyed by platform name (e.g. {"instagram": {...}}). Each entry may set "content" (platform-specific caption) and "contentType" (the post format for that platform). contentType values: Instagram "Post" | "Reels" | "Story" | "Trial Reel"; Facebook "Post" | "Reels" (Facebook Stories are not supported and are refused with a 400); YouTube "Video" | "Short". Omit contentType to use the platform default (video media defaults to Reels on Instagram). Each entry may also set "settings" with platform-specific options, e.g. Pinterest {"settings": {"boardId": "...", "link": "https://...", "title": "..."}} to pick the board and destination link, YouTube {"settings": {"title": "..."}}. YOUTUBE SETTINGS (all optional, camelCase or snake_case): {"youtube": {"settings": {"title": "<max 100; default first caption line>", "description": "<max 5000; default the caption>", "tags": ["a","b"], "categoryId": "22 People & Blogs (default) | 23 Comedy | 24 Entertainment | 26 Howto & Style | 27 Education | 28 Science & Technology | 10 Music | 20 Gaming | 17 Sports", "privacyStatus": "public|unlisted|private", "madeForKids": false, "containsSyntheticMedia": true (discloses realistic AI-altered content), "notifySubscribers": true, "license": "youtube|creativeCommon", "embeddable": true, "publicStatsViewable": true, "defaultLanguage": "en" (title and description language), "coverPhotoUrl": "<https JPG/PNG: the YouTube thumbnail; or use the cover_photo parameter>"}}}. Adding to playlists and a first comment are NOT available yet. YouTube decides what is a Short (square or vertical, up to 3 minutes); contentType "Short" is informational. Age restriction, paid promotion, comments on/off, Shorts remixing and caption certification cannot be set through YouTube\'s API (YouTube Studio only). Invalid YouTube settings are refused with a 400. MORE PLATFORM SETTINGS (keys are camelCase unless shown; all optional): TIKTOK {"tiktok": {"settings": {"privacyLevel": "PUBLIC_TO_EVERYONE|MUTUAL_FOLLOW_FRIENDS|FOLLOWER_OF_CREATOR|SELF_ONLY", "disableComment": false, "disableDuet": false, "disableStitch": false, "commercialContentEnabled": true + "brandOrganicToggle": true (promoting your own business) and/or "brandContentToggle": true (paid partnership), "isAIGC": true (AI-generated label), "title": "...", "videoCoverTimestamp": <ms into the video for the cover frame>, "photoCoverIndex": <0-based cover image for photo posts>, "autoAddMusic": true (photo posts)}}}. TikTok takes no custom cover image. X (also): "replySettings": "everyone|following|mentionedUsers", a poll with "pollEnabled": true, "pollOptions": [{"text": "A"}, {"text": "B"}] (2-4, no media) and "pollDuration": <minutes, default 1440>, "quoteTweetUrl": "https://x.com/.../status/<id>", "mediaAltText": "<alt text for the images>", "firstComment": "<posted as a reply>". INSTAGRAM (also): "altText": "<alt text, image posts>", "location": "<place name>" + "locationId": "<Facebook Page id of the place>" (both needed). Tagging people, collaborators and product tags are not available. FACEBOOK: "link": "https://..." (link card), "videoType": "reel|regular" (a landscape video always posts as a regular video), "placeId": "<place id>" + "placeName": "...", "callToAction": {"type": "LEARN_MORE|SHOP_NOW|SIGN_UP|...", "value": "https://..."} (needs "link"). LINKEDIN: "visibility": "PUBLIC|CONNECTIONS|LOGGED_IN_MEMBERS", "disableReshare": true. THREADS: "topicTag": "<one topic>", "linkAttachment": "https://..." (text-only posts). PINTEREST (also): "description": "<max 500>", "altText": "...", "boardSectionId": "<section id>" (title max 100). BLUESKY: "altText": "...", "language": "en", "replyControl": "everybody|nobody|mentioned|following", "contentLabel": "sexual|nudity|porn|graphic-media". TELEGRAM: "silent": true, "protectContent": true (no forwarding or saving), "captionAboveMedia": true, "mediaSpoiler": true, "linkPreview": "off|large|small", "linkPreviewAboveText": true. DISCORD: "username": "<max 80, cannot contain clyde or discord>", "avatarUrl": "https://...", "suppressMentions": true, "silent": true. WORDPRESS (also): "commentStatus": "open|closed". A first comment (firstComment) works on X only today; on Instagram, Facebook, LinkedIn, Threads and YouTube it is not available. X: {"x": {"settings": {"made_with_ai": true, "paid_partnership": true, "community_id": "<numeric X Community id>"}}} adds X\'s disclosure labels or posts into a Community the account belongs to. X ARTICLE (long-form, X Premium accounts only): {"x": {"content": "<body: # headings, - lists, > quotes, **bold**, *italic*, [links](https://...)>", "settings": {"post_type": "article", "title": "<max 100 chars>"}}} with ONLY X account ids, up to 5 images in media_ids (the first is the cover, 2000x800 looks best; place others inline with a line ![caption](image:2), or they go at the end), no video, body up to 25,000 characters. The body also supports --- dividers, ```code``` blocks, | tables |, a line that is just an X post link (embeds it) and ![caption](https://image-url). Limited to 2 published articles per X account per 24 hours. WORDPRESS BLOG POST: {"wordpress": {"content": "<body, same formatting as X Articles; raw HTML is kept as-is>", "settings": {"title": "<max 200 chars; default = a leading # Heading, else the first line>", "status": "publish|draft|pending|private", "excerpt": "<max 1000>", "tags": ["a"], "categories": ["News"], "slug": "...", "featuredImage": "first|none"}}} with WordPress account ids (other platforms in the same call use the top-level content), up to 20 images + 1 video in media_ids (the first image is the featured image; place others inline with ![caption](image:N), or they go at the end; the video goes at the top), body up to 200,000 characters. tags/categories take arrays or a comma string (categories also take numeric ids); missing tags are created. A blog post with no title is refused with a 400. GOOGLE BUSINESS PROFILE POST (google_business): {"google_business": {"content": "<optional text for Google only, max 1500 chars>", "settings": {"post_type": "update|event|offer", "button": "none|book|order|shop|learn_more|sign_up|call", "button_url": "https://...", "event_title": "<max 58>", "start_date": "YYYY-MM-DD or YYYY-MM-DDTHH:mm", "end_date": "...", "coupon_code": "...", "redeem_url": "https://...", "terms": "..."}}}. Text up to 1500 characters, at most 1 photo (JPG or PNG), no video. button_url is required for every button except call. Event and offer posts need event_title, start_date and end_date (business local time). Offer posts have no button. Do not put phone numbers in the text: Google may reject those posts. An invalid Google Business Profile post is refused with a 400.'),
     },
       annotations: {
         readOnlyHint: false,
@@ -268,7 +275,7 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async (args) => {
-      const { content, account_ids, timezone, media_ids, draft, platform_content, use_queue, thread_posts, schedule_at } = args;
+      const { content, account_ids, timezone, media_ids, draft, platform_content, use_queue, thread_posts, schedule_at, cover_photo, campaign_id, request_approval } = args;
       let { scheduled_for } = args;
       let picked: Awaited<ReturnType<typeof resolveBestTime>> | null = null;
       if (schedule_at === 'best_time') {
@@ -288,6 +295,9 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
         platform_content,
         use_queue,
         ...(thread_posts && thread_posts.length > 0 ? { thread_posts } : {}),
+        ...(cover_photo && (cover_photo.media_id || cover_photo.url) ? { cover_photo } : {}),
+        ...(typeof campaign_id === 'number' ? { campaign_id } : {}),
+        ...(request_approval ? { request_approval: true } : {}),
       });
       return {
         content: [
@@ -529,6 +539,96 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       return {
         content: [{ type: 'text' as const, text: `Media ${media_id} deleted successfully.` }],
       };
+    }
+  );
+
+  server.registerTool(
+    'create_media_upload',
+    {
+      title: 'Start a Direct Media Upload',
+      description: 'Upload a LOCAL file (one with no public URL), including PDFs for LinkedIn document posts. Step 1: call this with filename, content_type and size in bytes; it returns media_id and a short-lived upload_url. Step 2: PUT the raw file bytes to upload_url with header Content-Type set to the same content_type (for example: curl -X PUT -H "Content-Type: application/pdf" --data-binary @file.pdf "<upload_url>"). Step 3: call complete_media_upload with the media_id. Only use this when you can send the bytes yourself; for a file at a public URL use upload_media_from_url. Accepted: JPEG, PNG, GIF, WebP, HEIC, MP4 and PDF.',
+      inputSchema: {
+      filename: z.string().min(1).describe('File name including extension, e.g. "deck.pdf"'),
+      content_type: z.string().min(3).describe('MIME type, e.g. "application/pdf", "image/png", "video/mp4"'),
+      size: z.number().int().positive().describe('File size in bytes'),
+    },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ filename, content_type, size }) => {
+      const result = await client.uploadMedia({ filename, content_type, size });
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ ...result, next_step: `PUT the file bytes to upload_url with Content-Type: ${content_type}, then call complete_media_upload with media_id ${result.media_id}.` }, null, 2) }],
+      };
+    }
+  );
+
+  server.registerTool(
+    'complete_media_upload',
+    {
+      title: 'Finish a Direct Media Upload',
+      description: 'Confirm a direct upload from create_media_upload after the file bytes were PUT to its upload_url. Checks the file arrived and matches its type. The media_id can then be used in media_ids (a PDF on a LinkedIn account becomes a document post). Calling it again on ready media is harmless.',
+      inputSchema: {
+      media_id: z.string().uuid().describe('The media_id returned by create_media_upload'),
+    },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ media_id }) => {
+      const result = await client.completeMediaUpload(media_id);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'approve_post',
+    {
+      title: 'Approve Post',
+      description: 'Approval workflow: approve a post that is waiting for review (see list_posts with approval:"pending"). Approving does not publish it: call schedule_post afterwards to send it out. Needs a reviewer role in the workspace.',
+      inputSchema: {
+      post_id: z.string().describe('The post ID'),
+      note: z.string().max(2000).optional().describe('Optional note for the author'),
+    },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ post_id, note }) => {
+      const result = await client.approvePost(post_id, note);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    }
+  );
+
+  server.registerTool(
+    'request_post_changes',
+    {
+      title: 'Request Changes to Post',
+      description: 'Approval workflow: send a post waiting for review back to its author with a note saying what to change. The post stays a draft. Needs a reviewer role in the workspace.',
+      inputSchema: {
+      post_id: z.string().describe('The post ID'),
+      note: z.string().min(1).max(2000).describe('What needs changing; the author sees this'),
+    },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ post_id, note }) => {
+      const result = await client.requestPostChanges(post_id, note);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }
   );
 
@@ -872,7 +972,7 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
     'create_connect_link',
     {
       title: 'Create Account Connect Link',
-      description: 'Generate a short-lived authorization URL (10 min) to connect a NEW social account via OAuth: x, instagram, facebook, youtube, pinterest, threads, linkedin, tiktok, or google_business (Google Business Profile: the owner signs in with the Google account that owns or manages the business; if it manages several businesses, they choose which to add). Give the URL to the account owner to open in any browser and approve; the connected account then appears in list_accounts (poll it to confirm). For telegram, discord, bluesky or wordpress use connect_credential_account instead (no browser needed).',
+      description: 'Generate a short-lived authorization URL (10 min) to connect a NEW social account via OAuth: x, instagram, facebook, youtube, pinterest, threads, linkedin, tiktok, or google_business (Google Business Profile: the owner signs in with the Google account that owns or manages the business; if it manages several businesses, they choose which to add). Give the URL to the account owner to open in any browser and approve; the connected account then appears in list_accounts (poll it to confirm). For telegram, discord, bluesky or wordpress use connect_credential_account if you have it (no browser needed); if that tool is not available here, the user connects them in the PostEverywhere app at app.posteverywhere.ai/accounts.',
       inputSchema: {
         platform: z.enum(['x', 'instagram', 'facebook', 'youtube', 'pinterest', 'threads', 'linkedin', 'tiktok', 'google_business']).describe('OAuth platform to connect'),
       },

@@ -226,8 +226,9 @@ export class PostEverywhereClient {
 
   // ─── Posts ─────────────────────────────────────────────────
 
-  async listPosts(params?: { status?: string; platform?: string; limit?: number; offset?: number }): Promise<{ posts: Post[]; pagination: { limit: number; offset: number } }> {
+  async listPosts(params?: { status?: string; platform?: string; limit?: number; offset?: number; approval?: string }): Promise<{ posts: Post[]; pagination: { limit: number; offset: number } }> {
     const qs = new URLSearchParams();
+    if (params?.approval) qs.set('approval', params.approval);
     if (params?.status) qs.set('status', params.status);
     if (params?.platform) qs.set('platform', params.platform);
     if (params?.limit) qs.set('limit', String(params.limit));
@@ -255,6 +256,12 @@ export class PostEverywhereClient {
     use_queue?: boolean;
     /** The parts after content, in order. Posted as a linked thread (X, Threads, Bluesky). */
     thread_posts?: string[];
+    /** Video cover / YouTube thumbnail: an image URL or a media_id from upload_media_from_url. */
+    cover_photo?: { url?: string; media_id?: string };
+    /** Group the post into a campaign (id from create_campaign / list_campaigns). */
+    campaign_id?: number;
+    /** With draft: true, send the draft for approval in the workspace's approval workflow. */
+    request_approval?: boolean;
   }): Promise<{ post_id: string; status: string; scheduled_for: string | null; accounts_count?: number; message: string; next_steps?: Record<string, string> }> {
     return this.request('POST', '/posts', body);
   }
@@ -355,6 +362,21 @@ export class PostEverywhereClient {
     duration?: number;
   }): Promise<{ media_id: string; upload_url: string; provider: string; protocol: string; expires_in: number; max_size: number }> {
     return this.request('POST', '/media/upload', body);
+  }
+
+  /** Confirm a direct upload finished (after PUTting the bytes to upload_url). */
+  async completeMediaUpload(id: string): Promise<any> {
+    return this.request('POST', `/media/${encodeURIComponent(id)}/complete`, {});
+  }
+
+  /** Approval workflow: clear a pending post (it still needs schedule_post to go out). */
+  async approvePost(id: string, note?: string): Promise<any> {
+    return this.request('POST', `/posts/${encodeURIComponent(id)}/approve`, note ? { note } : {});
+  }
+
+  /** Approval workflow: send a post back to its author with a note. */
+  async requestPostChanges(id: string, note: string): Promise<any> {
+    return this.request('POST', `/posts/${encodeURIComponent(id)}/request-changes`, { note });
   }
 
   async uploadMediaFromUrl(body: {
