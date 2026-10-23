@@ -48,7 +48,7 @@ Official [Model Context Protocol](https://modelcontextprotocol.io) server for [P
 
 ### 1. Get an API key
 
-Sign up free at [posteverywhere.ai/signup](https://app.posteverywhere.ai/signup) (7-day trial), connect your social accounts, then create an API key at [Settings → Developers](https://app.posteverywhere.ai/developers). Choose your scopes:
+Sign up at [posteverywhere.ai/signup](https://app.posteverywhere.ai/signup) (7-day free trial, card required), connect your social accounts, then create an API key at [Settings → Developers](https://app.posteverywhere.ai/developers). Choose your scopes:
 
 - **Read** — list accounts, posts, and media
 - **Write** — create, edit, delete posts and media
@@ -268,7 +268,7 @@ Hitting a 429? The MCP server returns a clear `rate_limit_exceeded` code with `r
 - 🌐 [PostEverywhere Homepage](https://posteverywhere.ai)
 - 🛠️ [Developers Landing Page](https://posteverywhere.ai/developers) — overview of API, SDK, MCP, integrations
 - 🤖 [AI Agents Page](https://posteverywhere.ai/agents) — using PostEverywhere with Claude, ChatGPT, Cursor, and more
-- 💵 [Pricing](https://posteverywhere.ai/pricing) — Starter ($19), Growth ($39), Pro ($79); 7-day free trial
+- 💵 [Pricing](https://posteverywhere.ai/pricing) — Lite $9 (2 accounts), Starter $19 (5), Growth $29 (10), Scale $39 (20); API and MCP on every plan; 7-day free trial
 - ✍️ [Blog](https://posteverywhere.ai/blog) — guides, tutorials, product updates
 - 📚 [Help Center](https://posteverywhere.ai/support) — guides, troubleshooting, FAQs
 - 🎛️ [Dashboard (sign in)](https://app.posteverywhere.ai)
@@ -296,7 +296,7 @@ PostEverywhere is the backend for all of these — every plan includes every pla
 - 📦 **[`@posteverywhere/sdk`](https://github.com/posteverywhere/sdk)** — Node.js / TypeScript SDK ([npm](https://www.npmjs.com/package/@posteverywhere/sdk))
 - 🌐 **[posteverywhere.ai](https://posteverywhere.ai)** — Web dashboard, AI Studio, calendar UI
 - 📚 **[Help Center](https://posteverywhere.ai/support)** — Guides, troubleshooting, FAQ
-- 💵 **[Pricing](https://posteverywhere.ai/pricing)** — From $19/mo, 7-day free trial
+- 💵 **[Pricing](https://posteverywhere.ai/pricing)** — From $9/mo, 7-day free trial
 
 ## Support
 

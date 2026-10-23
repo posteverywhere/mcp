@@ -56,7 +56,7 @@ To test it inside Claude Code, point the `command` at your local checkout:
 }
 ```
 
-You'll need a PostEverywhere account. [Sign up free](https://app.posteverywhere.ai/signup) (7-day trial, no credit card required for the trial period), connect a few social accounts, then [create an API key](https://app.posteverywhere.ai/developers).
+You'll need a PostEverywhere account. [Sign up](https://app.posteverywhere.ai/signup) (7-day free trial, card required), connect a few social accounts, then [create an API key](https://app.posteverywhere.ai/developers).
 
 ## Pull request checklist
 
