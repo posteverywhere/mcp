@@ -8,7 +8,98 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { isIP } from 'node:net';
 import { PostEverywhereClient, currentTool } from './client.js';
+
+// ─── Local validation helpers ──────────────────────────────────────────
+// These are defense-in-depth in src: the PostEverywhere server is the
+// authoritative validator for scopes, ownership, approval state, SSRF and
+// platform rules, and it may already reject some of these. The checks here
+// stop a bad call from leaving the local process at all, and make the
+// tool's documented restrictions actually enforced instead of only stated.
+
+/** True for literal private / loopback / link-local / reserved IP addresses. */
+export function isPrivateIpAddress(hostname: string): boolean {
+  const family = isIP(hostname);
+  if (family === 4) {
+    const [a, b] = hostname.split('.').map(Number);
+    return (
+      a === 10 ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      a === 127 ||
+      (a === 169 && b === 254) ||
+      a === 0 ||
+      (a === 100 && b >= 64 && b <= 127)
+    );
+  }
+  if (family === 6) {
+    const h = hostname.toLowerCase();
+    return h === '::1' || h === '::' || h.startsWith('fe8') || h.startsWith('fe9') || h.startsWith('fea') || h.startsWith('feb') || h.startsWith('fc') || h.startsWith('fd');
+  }
+  return false;
+}
+
+/**
+ * Require a public https URL: no http (cleartext), no localhost, no
+ * .local, no literal private/loopback/link-local IP. Hostnames that are
+ * not literal IPs are accepted here — DNS rebinding / a hostname that
+ * resolves to a private address is still the server's job to reject.
+ */
+export function assertPublicHttpsUrl(value: string, label: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error(`${label} must be a valid URL.`);
+  }
+  if (parsed.protocol !== 'https:') {
+    throw new Error(`${label} must use https, not ${parsed.protocol} — the documented restriction is now enforced, not just stated.`);
+  }
+  const host = parsed.hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || isPrivateIpAddress(host)) {
+    throw new Error(`${label} must be a public URL — private, loopback and link-local addresses are not allowed.`);
+  }
+}
+
+/**
+ * Best-effort strip of active markup from WordPress HTML content.
+ * Removes <script>, <iframe>, <object>, <embed>, <form> and <base>,
+ * on* event-handler attributes, and javascript:/data:text/html:/vbscript:
+ * links. This is NOT a full HTML sanitizer and is not a substitute for
+ * the server / WordPress KSES filtering — it only stops the most direct
+ * stored-script path from leaving this client. Formatting tags are kept.
+ */
+export function sanitizeWordPressHtml(html: string): string {
+  return html
+    .replace(/<(script|iframe|object|embed|form|base|meta|link)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
+    .replace(/<(script|iframe|object|embed|form|base|meta|link)\b[^>]*\/?>/gi, '')
+    .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/\s+(href|src|xlink:href)\s*=\s*(?:"\s*(?:javascript|data:text\/html|vbscript):[^"]*"|'\s*(?:javascript|data:text\/html|vbscript):[^']*'|(?:javascript|data:text\/html|vbscript):[^\s>]+)/gi, ' $1="#"');
+}
+
+/**
+ * Apply the WordPress guards to a platform_content object and return a
+ * (possibly new) copy: sanitize wordpress content, and refuse a
+ * caller-set publish status when the post itself is a draft.
+ */
+export function applyWordPressGuards(
+  platformContent: Record<string, unknown> | undefined,
+  draft: boolean | undefined,
+): Record<string, unknown> | undefined {
+  if (!platformContent || typeof platformContent !== 'object') return platformContent;
+  const wp = (platformContent as Record<string, unknown>).wordpress;
+  if (!wp || typeof wp !== 'object') return platformContent;
+  const wpRecord = wp as Record<string, unknown>;
+  const settings = (wpRecord.settings ?? {}) as Record<string, unknown>;
+  if (draft === true && settings.status === 'publish') {
+    throw new Error('WordPress settings.status "publish" conflicts with draft: true — a draft must stay a draft. Remove the publish status or drop draft: true.');
+  }
+  if (typeof wpRecord.content === 'string') {
+    return { ...platformContent, wordpress: { ...wpRecord, content: sanitizeWordPressHtml(wpRecord.content) } };
+  }
+  return platformContent;
+}
 
 export interface RegisterToolsOptions {
   /**
@@ -250,13 +341,13 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       title: 'Create Post',
       description: 'Create a social media post on PostEverywhere. Three modes: (1) PUBLISH NOW — give content + account_ids, omit scheduled_for; (2) SCHEDULE — add scheduled_for; (3) DRAFT for human review — set draft: true, which saves the post WITHOUT publishing it (it appears in the user\'s PostEverywhere app and via list_posts(status:"draft"); you then publish it with schedule_post once approved). Use draft mode whenever a human wants to check posts before they go live. Supports per-platform overrides and media. THREADS: put part 1 in content and the parts that follow in thread_posts; the post goes out as a real linked thread (each part replies to the one before) on X and Bluesky, and as follow-up messages on Telegram and Discord (Threads chains are not available yet: a Threads account gets part 1 only). Returns the post ID, its status, and the next step to take. Irreversible in publish-now and schedule modes: a post that a social network has published stays public, and PostEverywhere cannot recall it.',
       inputSchema: {
-      content: z.string().describe('The text content of the post'),
+      content: z.string().min(1).max(200000).describe('The text content of the post (max 200,000 characters, the WordPress body limit)'),
       account_ids: z.array(z.number()).optional().describe('Social account IDs to post to (from list_accounts). REQUIRED to publish or schedule; OPTIONAL for a draft (accounts can be chosen later when you call schedule_post).'),
       scheduled_for: z.string().optional().describe('ISO 8601 datetime to schedule the post (e.g., 2026-03-15T14:00:00Z). Without an offset it is read as UTC. Omit to publish immediately. When draft:true this is optional and just pre-fills the draft\'s suggested time.'),
       timezone: z.string().optional().default('UTC').describe('IANA timezone (e.g., America/New_York), stored for display only. It does not change when the post goes out: scheduled_for without an offset is read as UTC. To post at 9:00 New York time, send the offset, e.g. 2026-03-15T09:00:00-05:00.'),
       media_ids: z.array(z.string()).optional().describe('Array of media UUIDs to attach. Get these from upload_media_from_url (recommended) or generate_image. Existing library files can be looked up with list_media. Per-platform limits are enforced, not trimmed: e.g. Pinterest takes 1 video or up to 5 images, and more is refused with a 400 whose message names the limit. (get_platform_rules lists file sizes and formats, not how many files each platform takes.)'),
       draft: z.boolean().optional().describe('Set true to save as a DRAFT for human review instead of publishing or scheduling. The draft is NOT published until you call schedule_post on it. Review drafts with list_posts(status:"draft") or get_post.'),
-      thread_posts: z.array(z.string().min(1)).max(25).optional().describe('Make the post a THREAD. The parts that come AFTER content, in order (content is part 1). Each part is posted as a reply to the one before. Works on X and Bluesky; Telegram and Discord get them as follow-up messages; Threads chains are not available yet (a Threads account gets part 1 only); any other account in the same post gets content only (the response lists those accounts). At least one account must be X, Bluesky, Telegram or Discord. Each part must fit the platform limit: X 280 characters (25,000 with X Premium), Bluesky 300, Telegram 4096, Discord 2000; get_platform_rules has the numbers. Up to 25 parts. Cannot be combined with an X Article. Works with draft: true (schedule_post then publishes the whole thread). Example: content "Three things I learned this year 🧵 1/3", thread_posts ["2/3 ...", "3/3 ..."].'),
+      thread_posts: z.array(z.string().min(1).max(25000)).max(25).optional().describe('Make the post a THREAD. The parts that come AFTER content, in order (content is part 1). Each part is posted as a reply to the one before. Works on X and Bluesky; Telegram and Discord get them as follow-up messages; Threads chains are not available yet (a Threads account gets part 1 only); any other account in the same post gets content only (the response lists those accounts). At least one account must be X, Bluesky, Telegram or Discord. Each part must fit the platform limit: X 280 characters (25,000 with X Premium), Bluesky 300, Telegram 4096, Discord 2000; get_platform_rules has the numbers. Up to 25 parts. Cannot be combined with an X Article. Works with draft: true (schedule_post then publishes the whole thread). Example: content "Three things I learned this year 🧵 1/3", thread_posts ["2/3 ...", "3/3 ..."].'),
       campaign_id: z.number().int().optional().describe('Put the post in a campaign (id from create_campaign or list_campaigns).'),
       request_approval: z.boolean().optional().describe('Only with draft: true: send the draft to the workspace\'s reviewers for approval instead of leaving it as a plain draft. Without draft: true the call is refused with a 400 and nothing is created. Reviewers use approve_post or request_post_changes; list_posts(approval:"pending") shows the queue.'),
       cover_photo: z.object({
@@ -275,7 +366,12 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async (args) => {
-      const { content, account_ids, timezone, media_ids, draft, platform_content, use_queue, thread_posts, schedule_at, cover_photo, campaign_id, request_approval } = args;
+      const { content, account_ids, timezone, media_ids, draft, use_queue, thread_posts, schedule_at, cover_photo, campaign_id, request_approval } = args;
+      // Local guards: a cover-photo URL must be https, and WordPress
+      // content gets active markup stripped; a draft cannot carry a
+      // WordPress publish status. The server / WordPress remain authoritative.
+      if (cover_photo?.url) assertPublicHttpsUrl(cover_photo.url, 'cover_photo.url');
+      const platform_content = applyWordPressGuards(args.platform_content as Record<string, unknown> | undefined, draft);
       let { scheduled_for } = args;
       let picked: Awaited<ReturnType<typeof resolveBestTime>> | null = null;
       if (schedule_at === 'best_time') {
@@ -329,6 +425,30 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async ({ post_id, scheduled_for, publish_now, account_ids, timezone, schedule_at }: { post_id: string; scheduled_for?: string; publish_now?: boolean; account_ids?: number[]; timezone?: string; schedule_at?: 'best_time' }) => {
+      // Approval gate (local, defense-in-depth): refuse to publish a draft
+      // that is still waiting for review or was sent back for changes.
+      // Plain drafts (never submitted) and approved drafts are not in
+      // those queues, so they pass. Only the first 100 posts in each queue
+      // are checked here — the server remains authoritative and may
+      // enforce the same gate itself. If the approval state cannot be read,
+      // fail closed — publishing is irreversible.
+      try {
+        const [pending, changes] = await Promise.all([
+          client.listPosts({ approval: 'pending', limit: 100 }),
+          client.listPosts({ approval: 'changes_requested', limit: 100 }),
+        ]);
+        const pendingIds = new Set((pending.posts || []).map((p) => p.id));
+        const changesIds = new Set((changes.posts || []).map((p) => p.id));
+        if (pendingIds.has(post_id)) {
+          throw new Error(`Post ${post_id} is waiting for review — it cannot be published with schedule_post until a reviewer approves it with approve_post.`);
+        }
+        if (changesIds.has(post_id)) {
+          throw new Error(`Post ${post_id} was sent back for changes — it cannot be published with schedule_post until the requested changes are made and a reviewer approves it with approve_post.`);
+        }
+      } catch (err) {
+        if (err instanceof Error && err.message.includes('waiting for review')) throw err;
+        throw new Error(`Could not verify the approval state of post ${post_id} before publishing (${err instanceof Error ? err.message : String(err)}). Refusing to publish until the approval state can be checked — list the post with list_posts(approval:"pending") and approve it first if needed.`);
+      }
       let picked: Awaited<ReturnType<typeof resolveBestTime>> | null = null;
       if (schedule_at === 'best_time') {
         if (scheduled_for || publish_now) {
@@ -359,7 +479,7 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       description: 'Update a scheduled or draft post on PostEverywhere. You can change the content, schedule time, timezone, target accounts, media attachments, or per-platform content (including a WordPress blog post\'s title, status, tags and categories). Only posts with status "scheduled" or "draft" can be edited — published posts cannot be modified. Returns the updated post with all its details. Fields you send replace the old values (per-platform settings are merged, see platform_content); PostEverywhere keeps no earlier version.',
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post to update'),
-      content: z.string().optional().describe('New text content for the post'),
+      content: z.string().min(1).max(200000).optional().describe('New text content for the post'),
       scheduled_for: z.string().optional().describe('New ISO 8601 datetime to schedule the post. Without an offset it is read as UTC.'),
       timezone: z.string().optional().describe('New IANA timezone, stored for display only. It does not change when the post goes out: scheduled_for without an offset is read as UTC.'),
       account_ids: z.array(z.number()).optional().describe('New array of social account IDs to post to. On a draft this only changes the saved targets; the draft still publishes only through schedule_post.'),
@@ -375,7 +495,11 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async (args) => {
-      const { post_id, content, scheduled_for, timezone, account_ids, media_ids, platform_content, thread_posts } = args;
+      const { post_id, content, scheduled_for, timezone, account_ids, media_ids, thread_posts } = args;
+      // Same WordPress guards as create_post: strip active markup, and a
+      // draft cannot be given a WordPress publish status by this edit.
+      const existing = await client.getPost(post_id);
+      const platform_content = applyWordPressGuards(args.platform_content as Record<string, unknown> | undefined, existing.status === 'draft' ? true : undefined);
       const result = await client.updatePost(post_id, {
         content,
         scheduled_for,
@@ -550,9 +674,9 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       title: 'Start a Direct Media Upload',
       description: 'Upload a LOCAL file (one with no public URL), including PDFs for LinkedIn document posts. Step 1: call this with filename, content_type and size in bytes; it returns media_id and a short-lived upload_url. Step 2: send the file to upload_url the way the protocol field in the response says. protocol "put" (videos and PDFs): PUT the raw bytes with header Content-Type set to the same content_type (curl -X PUT -H "Content-Type: application/pdf" --data-binary @file.pdf "<upload_url>"). protocol "multipart-form" (images): POST a multipart form with the file in a field named file (curl -X POST -F "file=@photo.jpg" "<upload_url>"). Step 3: call complete_media_upload with the media_id. Only use this when you can send the bytes yourself; for a file at a public URL use upload_media_from_url. Accepted: JPEG, PNG, GIF, WebP, HEIC, MP4 and PDF.',
       inputSchema: {
-      filename: z.string().min(1).describe('File name including extension, e.g. "deck.pdf"'),
-      content_type: z.string().min(3).describe('MIME type, e.g. "application/pdf", "image/png", "video/mp4"'),
-      size: z.number().int().positive().describe('File size in bytes'),
+      filename: z.string().min(1).max(255).describe('File name including extension, e.g. "deck.pdf"'),
+      content_type: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic', 'image/heif', 'video/mp4', 'application/pdf']).describe('MIME type, e.g. "application/pdf", "image/png", "video/mp4"'),
+      size: z.number().int().positive().max(4294967296).describe('File size in bytes (max 4 GB, the largest media the service accepts)'),
     },
       annotations: {
         readOnlyHint: false,
@@ -562,6 +686,9 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async ({ filename, content_type, size }) => {
+      if (filename.includes('/') || filename.includes('\\')) {
+        throw new Error('filename must be a plain file name, not a path.');
+      }
       const result = await client.uploadMedia({ filename, content_type, size });
       return {
         content: [{ type: 'text' as const, text: JSON.stringify({ ...result, next_step: result.protocol === 'multipart-form'
@@ -598,7 +725,7 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       title: 'Approve Post',
       description: 'Approval workflow: approve a post that is waiting for review (see list_posts with approval:"pending"). Approving does not publish it: call schedule_post afterwards to send it out. Needs a reviewer role in the workspace.',
       inputSchema: {
-      post_id: z.string().describe('The post ID'),
+      post_id: z.string().uuid().describe('The post ID'),
       note: z.string().max(2000).optional().describe('Optional note for the author'),
     },
       annotations: {
@@ -620,7 +747,7 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       title: 'Request Changes to Post',
       description: 'Approval workflow: send a post waiting for review back to its author with a note saying what to change. The post stays a draft. Needs a reviewer role in the workspace.',
       inputSchema: {
-      post_id: z.string().describe('The post ID'),
+      post_id: z.string().uuid().describe('The post ID'),
       note: z.string().min(1).max(2000).describe('What needs changing; the author sees this'),
     },
       annotations: {
@@ -653,6 +780,9 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async ({ url, filename }) => {
+      // The documented restriction (public HTTPS, no private/loopback) is
+      // now enforced locally before the server is asked to fetch the URL.
+      assertPublicHttpsUrl(url, 'url');
       const result = await client.uploadMediaFromUrl({ url, filename });
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
@@ -908,7 +1038,21 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       title: 'Bulk Create Posts',
       description: 'Create up to 50 posts in one PostEverywhere call. Each post is checked one by one, exactly like create_post (rate limits included), including X Articles, WordPress blog posts (platform_content.wordpress) and Google Business Profile posts (platform_content.google_business). Returns per-item success/error so you can handle partial failures. Use this for bulk scheduling workflows. Irreversible for every post that publishes: it becomes public on the connected social accounts, and PostEverywhere cannot recall it.',
       inputSchema: {
-      posts: z.array(z.any()).min(1).max(50).describe('Array of post objects (same shape as create_post body). Max 50. An item may use schedule_at: "best_time" (with account_ids, and no scheduled_for or use_queue): each one is given its own next best time.'),
+      posts: z.array(z.object({
+        content: z.string().min(1).max(200000),
+        account_ids: z.array(z.number()).optional(),
+        scheduled_for: z.string().optional(),
+        timezone: z.string().optional(),
+        media_ids: z.array(z.string().uuid()).optional(),
+        draft: z.boolean().optional(),
+        thread_posts: z.array(z.string().min(1).max(25000)).max(25).optional(),
+        campaign_id: z.number().int().optional(),
+        request_approval: z.boolean().optional(),
+        cover_photo: z.object({ media_id: z.string().optional(), url: z.string().url().optional() }).optional(),
+        use_queue: z.boolean().optional(),
+        platform_content: z.record(z.any()).optional(),
+        schedule_at: z.enum(['best_time']).optional(),
+      })).min(1).max(50).describe('Array of post objects (same shape as create_post body). Max 50. An item may use schedule_at: "best_time" (with account_ids, and no scheduled_for or use_queue): each one is given its own next best time. Each item is validated like a single create_post — unknown fields are dropped, not forwarded.'),
     },
       annotations: {
         readOnlyHint: false,
@@ -920,25 +1064,39 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
     async ({ posts }) => {
       // schedule_at: "best_time" is resolved here, per item, like create_post. The API does not
       // read schedule_at (it refuses it), so an unresolved item would be rejected.
+      // Best-time resolution runs in batches of 5, in item order, so the
+      // pick notes stay in item order and one call cannot fan out to 50
+      // concurrent getBestTimes requests.
       const picks: string[] = [];
-      const items = await Promise.all((posts as any[]).map(async (item, i) => {
-        if (!item || typeof item !== 'object' || item.schedule_at === undefined) return item;
-        const { schedule_at, ...rest } = item;
-        if (schedule_at !== 'best_time') {
-          throw new Error(`posts[${i}].schedule_at must be "best_time" (or leave it out and send scheduled_for).`);
-        }
-        if (rest.scheduled_for || rest.use_queue) {
-          throw new Error(`posts[${i}]: schedule_at: "best_time" picks the time itself: do not also send scheduled_for or use_queue.`);
-        }
-        const picked = await resolveBestTime(client, rest.account_ids, rest.timezone);
-        picks.push(`posts[${i}] best_time: scheduled for ${picked.label}. ${picked.basis_note}`);
-        return { ...rest, scheduled_for: picked.scheduled_for };
-      }));
-      const result = await client.bulkCreatePosts(items);
+      const items: any[] = [];
+      for (let start = 0; start < (posts as any[]).length; start += 5) {
+        const batch = await Promise.all((posts as any[]).slice(start, start + 5).map(async (item, j) => {
+          const i = start + j;
+          if (!item || typeof item !== 'object' || item.schedule_at === undefined) return item;
+          const { schedule_at, ...rest } = item;
+          if (schedule_at !== 'best_time') {
+            throw new Error(`posts[${i}].schedule_at must be "best_time" (or leave it out and send scheduled_for).`);
+          }
+          if (rest.scheduled_for || rest.use_queue) {
+            throw new Error(`posts[${i}]: schedule_at: "best_time" picks the time itself: do not also send scheduled_for or use_queue.`);
+          }
+          const picked = await resolveBestTime(client, rest.account_ids, rest.timezone);
+          picks[i] = `posts[${i}] best_time: scheduled for ${picked.label}. ${picked.basis_note}`;
+          return { ...rest, scheduled_for: picked.scheduled_for };
+        }));
+        items.push(...batch);
+      }
+      // Same WordPress guards as create_post, per item.
+      const guarded = items.map((item) => {
+        if (!item || typeof item !== 'object') return item;
+        if (item.cover_photo?.url) assertPublicHttpsUrl(item.cover_photo.url, 'cover_photo.url');
+        return { ...item, ...(item.platform_content ? { platform_content: applyWordPressGuards(item.platform_content, item.draft) } : {}) };
+      });
+      const result = await client.bulkCreatePosts(guarded);
       return {
         content: [
           { type: 'text' as const, text: JSON.stringify(result, null, 2) },
-          ...(picks.length ? [{ type: 'text' as const, text: picks.join('\n') }] : []),
+          ...(picks.filter(Boolean).length ? [{ type: 'text' as const, text: picks.filter(Boolean).join('\n') }] : []),
         ],
       };
     }
@@ -965,6 +1123,18 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async (args) => {
+      // The description promises at least one filter — enforce it locally
+      // instead of letting an empty call retry the entire failure history.
+      // max_attempts alone does not narrow anything, so it does not count.
+      const hasFilter =
+        (args.post_ids?.length ?? 0) > 0 ||
+        args.account_id !== undefined ||
+        args.platform !== undefined ||
+        args.failed_after !== undefined ||
+        args.failed_before !== undefined;
+      if (!hasFilter) {
+        throw new Error('retry_failed_posts requires at least one filter (post_ids, account_id, platform, failed_after or failed_before) — it refuses to retry the entire failure history.');
+      }
       const result = await client.retryFailedPosts(args);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }
@@ -1056,6 +1226,35 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async (args) => {
+      // Per-platform credential requirements, enforced locally before
+      // anything is forwarded: a platform must send exactly its own
+      // credential fields, and a credential for another platform is
+      // rejected rather than forwarded to the server.
+      const required: Record<string, string[]> = {
+        telegram: ['bot_token', 'channel'],
+        discord: ['webhook_url'],
+        bluesky: ['handle', 'app_password'],
+        wordpress: ['site_url', 'username', 'app_password'],
+      };
+      const allowed: Record<string, string[]> = {
+        telegram: ['bot_token', 'channel'],
+        discord: ['webhook_url'],
+        bluesky: ['handle', 'app_password'],
+        wordpress: ['site_url', 'username', 'app_password'],
+      };
+      const missing = (required[args.platform] || []).filter((f) => (args as Record<string, unknown>)[f] === undefined || (args as Record<string, unknown>)[f] === '');
+      if (missing.length) {
+        throw new Error(`connect_credential_account for ${args.platform} requires ${missing.join(', ')} — the credential fields for other platforms are not accepted here.`);
+      }
+      const mismatched = Object.keys(args).filter((f) => f !== 'platform' && !(allowed[args.platform] || []).includes(f) && (args as Record<string, unknown>)[f] !== undefined);
+      if (mismatched.length) {
+        throw new Error(`connect_credential_account for ${args.platform} does not accept ${mismatched.join(', ')} — those fields belong to another platform.`);
+      }
+      if (args.webhook_url) assertPublicHttpsUrl(args.webhook_url, 'webhook_url');
+      if (args.site_url) {
+        const site = new URL(args.site_url);
+        if (site.protocol !== 'https:') throw new Error('site_url must use https.');
+      }
       const result = await client.connectCredentialAccount(args);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }
@@ -1101,6 +1300,15 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async (args) => {
+      // The documented restriction (public HTTPS URL) is now enforced
+      // locally, and events are restricted to the documented allowlist —
+      // unknown event names were previously forwarded verbatim.
+      assertPublicHttpsUrl(args.url, 'url');
+      const allowedEvents = ['post.scheduled', 'post.published', 'post.failed', 'post.partially_failed', 'post.warning', 'post.deleted', 'post.approval_requested', 'post.approved', 'post.changes_requested', 'account.disconnected', 'account.reconnect_needed', 'media.uploaded', 'media.deleted'];
+      const unknown = args.events.filter((e) => !allowedEvents.includes(e));
+      if (unknown.length) {
+        throw new Error(`Unknown webhook event(s): ${unknown.join(', ')}. Allowed events: ${allowedEvents.join(', ')}.`);
+      }
       const result = await client.createWebhook(args);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }
@@ -1146,6 +1354,14 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       },
     },
     async ({ id, ...body }) => {
+      if (body.url) assertPublicHttpsUrl(body.url, 'url');
+      if (body.events) {
+        const allowedEvents = ['post.scheduled', 'post.published', 'post.failed', 'post.partially_failed', 'post.warning', 'post.deleted', 'post.approval_requested', 'post.approved', 'post.changes_requested', 'account.disconnected', 'account.reconnect_needed', 'media.uploaded', 'media.deleted'];
+        const unknown = body.events.filter((e) => !allowedEvents.includes(e));
+        if (unknown.length) {
+          throw new Error(`Unknown webhook event(s): ${unknown.join(', ')}. Allowed events: ${allowedEvents.join(', ')}.`);
+        }
+      }
       const result = await client.updateWebhook(id, body);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }
