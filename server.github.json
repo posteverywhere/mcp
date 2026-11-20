@@ -1,16 +1,16 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.posteverywhere/mcp",
-  "description": "Schedule and publish social posts to all top platforms with media, campaigns, analytics and AI captions",
+  "description": "The agentic social media scheduler. Write, schedule and publish to all top social platforms.",
   "repository": {
     "url": "https://github.com/posteverywhere/mcp",
     "source": "github"
   },
-  "version": "1.7.1",
+  "version": "1.14.2",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://mcp.posteverywhere.ai/mcp"
+      "url": "https://mcp.posteverywhere.ai/"
     }
   ]
 }
