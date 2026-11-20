@@ -9,7 +9,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { isIP } from 'node:net';
-import { PostEverywhereClient, currentTool } from './client.js';
+import { PostEverywhereClient, currentTool, type Post } from './client.js';
 
 // ─── Local validation helpers ──────────────────────────────────────────
 // These are defense-in-depth in src: the PostEverywhere server is the
@@ -18,11 +18,33 @@ import { PostEverywhereClient, currentTool } from './client.js';
 // stop a bad call from leaving the local process at all, and make the
 // tool's documented restrictions actually enforced instead of only stated.
 
-/** True for literal private / loopback / link-local / reserved IP addresses. */
+/**
+ * True for literal private / loopback / link-local / reserved IP addresses.
+ * The input may be a WHATWG hostname, which serializes IPv6 literals with
+ * brackets ('[::1]') — isIP returns 0 for the bracketed form, so the
+ * brackets are stripped before the family check. IPv4-mapped IPv6
+ * (::ffff:127.0.0.1) is judged by its embedded IPv4 address, a trailing
+ * dot (127.0.0.1.) is ignored, and a zone id (%25lo0) is dropped.
+ */
 export function isPrivateIpAddress(hostname: string): boolean {
-  const family = isIP(hostname);
+  let host = hostname.toLowerCase().trim();
+  if (host.startsWith('[') && host.endsWith(']')) host = host.slice(1, -1);
+  const zoneAt = host.indexOf('%25');
+  if (zoneAt !== -1) host = host.slice(0, zoneAt);
+  const mapped = host.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+  if (mapped) return isPrivateIpAddress(mapped[1]);
+  // WHATWG URL parsing serializes the mapped form as hex
+  // (::ffff:127.0.0.1 becomes ::ffff:7f00:1), so match that too and
+  // judge the embedded IPv4 address.
+  const mappedHex = host.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+  if (mappedHex) {
+    const n = (parseInt(mappedHex[1], 16) << 16) + parseInt(mappedHex[2], 16);
+    return isPrivateIpAddress(`${(n >>> 24) & 0xff}.${(n >>> 16) & 0xff}.${(n >>> 8) & 0xff}.${n & 0xff}`);
+  }
+  if (host.endsWith('.')) host = host.slice(0, -1);
+  const family = isIP(host);
   if (family === 4) {
-    const [a, b] = hostname.split('.').map(Number);
+    const [a, b] = host.split('.').map(Number);
     return (
       a === 10 ||
       (a === 172 && b >= 16 && b <= 31) ||
@@ -34,8 +56,7 @@ export function isPrivateIpAddress(hostname: string): boolean {
     );
   }
   if (family === 6) {
-    const h = hostname.toLowerCase();
-    return h === '::1' || h === '::' || h.startsWith('fe8') || h.startsWith('fe9') || h.startsWith('fea') || h.startsWith('feb') || h.startsWith('fc') || h.startsWith('fd');
+    return host === '::1' || host === '::' || host.startsWith('fe8') || host.startsWith('fe9') || host.startsWith('fea') || host.startsWith('feb') || host.startsWith('fc') || host.startsWith('fd');
   }
   return false;
 }
@@ -69,13 +90,42 @@ export function assertPublicHttpsUrl(value: string, label: string): void {
  * links. This is NOT a full HTML sanitizer and is not a substitute for
  * the server / WordPress KSES filtering — it only stops the most direct
  * stored-script path from leaving this client. Formatting tags are kept.
+ *
+ * The chain runs until the output stops changing (at most 10 passes).
+ * One pass is not enough: deleting an inner <script> can join the
+ * surviving fragments into a live <script> tag, which only a later pass
+ * sees. Link schemes are checked after decoding numeric character
+ * references and stripping whitespace, so java&#x09;script: and
+ * data:text/html;base64 payloads are caught too.
  */
 export function sanitizeWordPressHtml(html: string): string {
+  let previous = html;
+  for (let i = 0; i < 10; i++) {
+    const next = sanitizeWordPressHtmlOnce(previous);
+    if (next === previous) return next;
+    previous = next;
+  }
+  return previous;
+}
+
+function sanitizeWordPressHtmlOnce(html: string): string {
   return html
     .replace(/<(script|iframe|object|embed|form|base|meta|link)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, '')
     .replace(/<(script|iframe|object|embed|form|base|meta|link)\b[^>]*\/?>/gi, '')
     .replace(/\s+on\w+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/\s+(href|src|xlink:href)\s*=\s*(?:"\s*(?:javascript|data:text\/html|vbscript):[^"]*"|'\s*(?:javascript|data:text\/html|vbscript):[^']*'|(?:javascript|data:text\/html|vbscript):[^\s>]+)/gi, ' $1="#"');
+    .replace(/(^|[\s/])((?:href|src|xlink:href)\s*=\s*)(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi, (_m, before: string, attr: string, dq?: string, sq?: string, unq?: string) => {
+      const value = dq ?? sq ?? unq ?? '';
+      const decoded = value
+        .replace(/&#x([0-9a-f]+);?/gi, (_e, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+        .replace(/&#(\d+);?/g, (_e, dec: string) => String.fromCharCode(parseInt(dec, 10)))
+        .replace(/&(tab|newline);/gi, '')
+        .replace(/[\s\u0000-\u001f]+/g, '')
+        .toLowerCase();
+      if (/^(?:javascript|vbscript):/.test(decoded) || /^data:text\/html[;:]/.test(decoded)) {
+        return `${before}${attr}"#"`;
+      }
+      return _m;
+    });
 }
 
 /**
@@ -99,6 +149,46 @@ export function applyWordPressGuards(
     return { ...platformContent, wordpress: { ...wpRecord, content: sanitizeWordPressHtml(wpRecord.content) } };
   }
   return platformContent;
+}
+
+/**
+ * Read a whole approval queue, paging through listPosts instead of
+ * trusting the first page. A queue read that stops early would silently
+ * clear drafts beyond the window, so this fails closed: it throws if a
+ * page does not advance (the server ignoring offset) or if the queue
+ * grows past 10,000 entries. Callers treat a throw as "approval state
+ * unknown" and refuse the irreversible step.
+ */
+export async function listApprovalQueue(client: PostEverywhereClient, approval: 'pending' | 'approved' | 'changes_requested'): Promise<Post[]> {
+  const posts: Post[] = [];
+  const seen = new Set<string>();
+  let offset = 0;
+  for (let page = 0; page < 100; page++) {
+    const result = await client.listPosts({ approval, limit: 100, offset });
+    const pagePosts = result.posts || [];
+    if (pagePosts.length < 100) {
+      for (const p of pagePosts) {
+        if (!seen.has(p.id)) {
+          seen.add(p.id);
+          posts.push(p);
+        }
+      }
+      return posts;
+    }
+    let added = 0;
+    for (const p of pagePosts) {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        posts.push(p);
+        added++;
+      }
+    }
+    if (added === 0) {
+      throw new Error(`Approval queue "${approval}" did not advance when paging (offset ${offset}) — the server may not honour offset, so the queue cannot be read reliably.`);
+    }
+    offset += 100;
+  }
+  throw new Error(`Approval queue "${approval}" has more than 10,000 entries — refusing to act on a partial view of the queue.`);
 }
 
 export interface RegisterToolsOptions {
@@ -428,17 +518,18 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       // Approval gate (local, defense-in-depth): refuse to publish a draft
       // that is still waiting for review or was sent back for changes.
       // Plain drafts (never submitted) and approved drafts are not in
-      // those queues, so they pass. Only the first 100 posts in each queue
-      // are checked here — the server remains authoritative and may
-      // enforce the same gate itself. If the approval state cannot be read,
-      // fail closed — publishing is irreversible.
+      // those queues, so they pass. Both queues are read in full by
+      // paging — checking only the first 100 would silently clear a
+      // draft beyond the window. The server remains authoritative and may
+      // enforce the same gate itself. If the approval state cannot be
+      // read, fail closed — publishing is irreversible.
       try {
         const [pending, changes] = await Promise.all([
-          client.listPosts({ approval: 'pending', limit: 100 }),
-          client.listPosts({ approval: 'changes_requested', limit: 100 }),
+          listApprovalQueue(client, 'pending'),
+          listApprovalQueue(client, 'changes_requested'),
         ]);
-        const pendingIds = new Set((pending.posts || []).map((p) => p.id));
-        const changesIds = new Set((changes.posts || []).map((p) => p.id));
+        const pendingIds = new Set(pending.map((p) => p.id));
+        const changesIds = new Set(changes.map((p) => p.id));
         if (pendingIds.has(post_id)) {
           throw new Error(`Post ${post_id} is waiting for review — it cannot be published with schedule_post until a reviewer approves it with approve_post.`);
         }
@@ -446,7 +537,7 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
           throw new Error(`Post ${post_id} was sent back for changes — it cannot be published with schedule_post until the requested changes are made and a reviewer approves it with approve_post.`);
         }
       } catch (err) {
-        if (err instanceof Error && err.message.includes('waiting for review')) throw err;
+        if (err instanceof Error && (err.message.includes('waiting for review') || err.message.includes('sent back for changes'))) throw err;
         throw new Error(`Could not verify the approval state of post ${post_id} before publishing (${err instanceof Error ? err.message : String(err)}). Refusing to publish until the approval state can be checked — list the post with list_posts(approval:"pending") and approve it first if needed.`);
       }
       let picked: Awaited<ReturnType<typeof resolveBestTime>> | null = null;
@@ -476,7 +567,7 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
     'update_post',
     {
       title: 'Update Post',
-      description: 'Update a scheduled or draft post on PostEverywhere. You can change the content, schedule time, timezone, target accounts, media attachments, or per-platform content (including a WordPress blog post\'s title, status, tags and categories). Only posts with status "scheduled" or "draft" can be edited — published posts cannot be modified. Returns the updated post with all its details. Fields you send replace the old values (per-platform settings are merged, see platform_content); PostEverywhere keeps no earlier version.',
+      description: 'Update a scheduled or draft post on PostEverywhere. You can change the content, schedule time, timezone, target accounts, media attachments, or per-platform content (including a WordPress blog post\'s title, status, tags and categories). Only posts with status "scheduled" or "draft" can be edited — published posts cannot be modified. Returns the updated post with all its details. Fields you send replace the old values (per-platform settings are merged, see platform_content); PostEverywhere keeps no earlier version. Changing the content of a draft a reviewer already approved is refused — send it back with request_post_changes first, edit it, and get it approved again.',
       inputSchema: {
       post_id: z.string().uuid().describe('The UUID of the post to update'),
       content: z.string().min(1).max(200000).optional().describe('New text content for the post'),
@@ -500,6 +591,29 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       // draft cannot be given a WordPress publish status by this edit.
       const existing = await client.getPost(post_id);
       const platform_content = applyWordPressGuards(args.platform_content as Record<string, unknown> | undefined, existing.status === 'draft' ? true : undefined);
+      // Re-approval guard (local, defense-in-depth): an edit that changes
+      // what a reviewer approved must not sail through as the approved
+      // version. There is no API to re-submit a post for review — the
+      // only re-approval path is a reviewer sending it back with
+      // request_post_changes and approving it again — so a content edit
+      // to an approved draft is refused here instead of silently
+      // invalidating the approval. Re-timing (scheduled_for/timezone) and
+      // re-targeting (account_ids) alone do not change the reviewed
+      // content, so they pass. The server remains authoritative: it may
+      // reset approval on PATCH itself, which no local check can see.
+      const touchesContent = content !== undefined || thread_posts !== undefined || media_ids !== undefined || platform_content !== undefined;
+      let approvalWarning: string | null = null;
+      if (touchesContent) {
+        try {
+          const approved = await listApprovalQueue(client, 'approved');
+          if (approved.some((p) => p.id === post_id)) {
+            throw new Error(`Post ${post_id} was already approved by a reviewer — this edit changes its content, so it cannot go through as the approved version. Send it back with request_post_changes, make the edit, and have a reviewer approve it again with approve_post.`);
+          }
+        } catch (err) {
+          if (err instanceof Error && err.message.includes('already approved by a reviewer')) throw err;
+          approvalWarning = `Warning: could not verify whether post ${post_id} was already approved before this edit (${err instanceof Error ? err.message : String(err)}). If a reviewer had approved it, this edit may have invalidated that approval — ask a reviewer to check it before scheduling.`;
+        }
+      }
       const result = await client.updatePost(post_id, {
         content,
         scheduled_for,
@@ -510,7 +624,10 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
         ...(thread_posts !== undefined ? { thread_posts } : {}),
       });
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        content: [
+          { type: 'text' as const, text: JSON.stringify(result, null, 2) },
+          ...(approvalWarning ? [{ type: 'text' as const, text: approvalWarning }] : []),
+        ],
       };
     }
   );
@@ -1126,16 +1243,21 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
       // The description promises at least one filter — enforce it locally
       // instead of letting an empty call retry the entire failure history.
       // max_attempts alone does not narrow anything, so it does not count.
+      // An empty-string date filter narrows nothing either, so it is
+      // treated as absent (and stripped before forwarding).
       const hasFilter =
         (args.post_ids?.length ?? 0) > 0 ||
         args.account_id !== undefined ||
         args.platform !== undefined ||
-        args.failed_after !== undefined ||
-        args.failed_before !== undefined;
+        (args.failed_after?.trim() ?? '') !== '' ||
+        (args.failed_before?.trim() ?? '') !== '';
       if (!hasFilter) {
         throw new Error('retry_failed_posts requires at least one filter (post_ids, account_id, platform, failed_after or failed_before) — it refuses to retry the entire failure history.');
       }
-      const result = await client.retryFailedPosts(args);
+      const forwarded = { ...args };
+      if ((forwarded.failed_after?.trim() ?? '') === '') delete forwarded.failed_after;
+      if ((forwarded.failed_before?.trim() ?? '') === '') delete forwarded.failed_before;
+      const result = await client.retryFailedPosts(forwarded);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }
   );
@@ -1251,10 +1373,13 @@ export function registerTools(rawServer: McpServer, client: PostEverywhereClient
         throw new Error(`connect_credential_account for ${args.platform} does not accept ${mismatched.join(', ')} — those fields belong to another platform.`);
       }
       if (args.webhook_url) assertPublicHttpsUrl(args.webhook_url, 'webhook_url');
-      if (args.site_url) {
-        const site = new URL(args.site_url);
-        if (site.protocol !== 'https:') throw new Error('site_url must use https.');
-      }
+      // site_url gets the same public-https check as webhook_url: the
+      // default hosted server cannot reach a private WordPress site, so
+      // sending it app credentials for one would hand them to the
+      // server's own network. A self-hosted PostEverywhere on the same
+      // private network is the one exception — that deployment must
+      // relax this check locally.
+      if (args.site_url) assertPublicHttpsUrl(args.site_url, 'site_url');
       const result = await client.connectCredentialAccount(args);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     }

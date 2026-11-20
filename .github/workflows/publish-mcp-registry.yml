@@ -2,6 +2,18 @@
 # Registry via GitHub OIDC. This namespace is what GitHub's MCP Registry
 # (github.com/mcp), VS Code, and Copilot surface — the ai.posteverywhere
 # entry (published via domain auth) is not ingested there.
+#
+# Supply-chain notes (see the security-audit FIX-REPORT):
+# - mcp-publisher is pinned to a release and verified against its published
+#   SHA-256 before it runs: this job holds the OIDC token that authorizes
+#   publishing, so what it executes must be what was reviewed. Bump
+#   MCP_PUBLISHER_VERSION and MCP_PUBLISHER_SHA256 together — the digest
+#   comes from that release's registry_<version>_checksums.txt.
+# - The version check below fails the run unless every manifest agrees
+#   with package.json, so a stale server.github.json can never again be
+#   published as the current release.
+# - Publishing runs only from main or a v* release tag. A dispatch from
+#   any other ref fails closed instead of publishing that ref's manifest.
 name: Publish to MCP Registry (io.github namespace)
 on: workflow_dispatch
 permissions:
@@ -12,8 +24,32 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Check dispatch ref and version consistency
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF}" in
+            refs/heads/main|refs/tags/v*) ;;
+            *) echo "::error::Refusing to publish from ${GITHUB_REF} — publish only from main or a v* release tag."; exit 1 ;;
+          esac
+          pkg=$(node -p "require('./package.json').version")
+          for f in server.json server.github.json gemini-extension.json; do
+            ver=$(node -p "require('./${f}').version")
+            if [ "$ver" != "$pkg" ]; then
+              echo "::error::${f} version (${ver}) does not match package.json version (${pkg}) — bump them together."
+              exit 1
+            fi
+          done
+          echo "All manifests agree on version ${pkg}."
       - name: Install mcp-publisher
-        run: curl -sL https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz | tar xz mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.8.1
+          MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+        run: |
+          set -euo pipefail
+          curl -fsSL -o mcp-publisher.tar.gz "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          rm mcp-publisher.tar.gz
       - name: Publish
         run: |
           cp server.github.json server.json
