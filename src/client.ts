@@ -26,6 +26,40 @@ export function readPackageVersion(): string {
 export const MCP_VERSION = readPackageVersion();
 
 /**
+ * Maximum API response body the client will buffer: 10 MB. Anything larger
+ * is rejected before JSON.parse, so a slow or oversized response cannot
+ * hang the local MCP process or exhaust its memory.
+ */
+export const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
+
+/** Per-request timeout: 30 seconds. */
+export const REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * Validate the API base URL before any Bearer key is sent to it.
+ * The key must only travel over https, and never with embedded credentials.
+ * http is allowed only for loopback hosts (local development against a
+ * dummy server); every other host must be https.
+ */
+export function validateBaseUrl(raw: string): string {
+  const baseUrl = raw.replace(/\/$/, '');
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error(`Invalid POSTEVERYWHERE_BASE_URL: "${raw}" is not a valid URL.`);
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error('Invalid POSTEVERYWHERE_BASE_URL: credentials must not be embedded in the base URL.');
+  }
+  const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '[::1]';
+  if (parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && isLoopback)) {
+    throw new Error(`Invalid POSTEVERYWHERE_BASE_URL: "${parsed.protocol}//${parsed.hostname}" — the API base URL must use https (http is only allowed for loopback hosts). The Bearer API key is never sent over cleartext http to a remote host.`);
+  }
+  return baseUrl;
+}
+
+/**
  * The MCP tool being run, so each API call can say which tool made it
  * (X-PE-MCP-Tool). The customer sees this in Developers > Logs ("create_post"
  * instead of "POST /v1/posts"). A label only: it grants nothing.
@@ -171,7 +205,7 @@ export class PostEverywhereClient {
   private surface?: string;
 
   constructor(opts: { baseUrl?: string; apiKey: string; surface?: string }) {
-    this.baseUrl = (opts.baseUrl ?? 'https://app.posteverywhere.ai').replace(/\/$/, '');
+    this.baseUrl = validateBaseUrl(opts.baseUrl ?? 'https://app.posteverywhere.ai');
     this.apiKey = opts.apiKey;
     this.surface = opts.surface;
   }
@@ -180,6 +214,9 @@ export class PostEverywhereClient {
     const url = `${this.baseUrl}/api/v1${path}`;
     const resp = await fetch(url, {
       method,
+      // 30s deadline: without this a stalled API response hangs the MCP
+      // process indefinitely (no timeout existed before this fix).
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
         // Identifies MCP traffic to the v1 logger (→ PostHog client_tool='mcp').
@@ -193,7 +230,38 @@ export class PostEverywhereClient {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    const text = await resp.text();
+    // Stream the body with a hard size cap instead of resp.text(): an
+    // unbounded read lets one oversized response buffer without limit.
+    let text = '';
+    if (!resp.body) {
+      text = await resp.text();
+      if (text.length > MAX_RESPONSE_BYTES) {
+        throw new Error(
+          `PostEverywhere API returned a response larger than ${MAX_RESPONSE_BYTES} bytes. ` +
+          'This is a temporary server problem: wait about 30 seconds, then try once more with a narrower request (e.g. a smaller limit).'
+        );
+      }
+    } else {
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          text += decoder.decode(value, { stream: true });
+          if (text.length > MAX_RESPONSE_BYTES) {
+            await reader.cancel();
+            throw new Error(
+              `PostEverywhere API returned a response larger than ${MAX_RESPONSE_BYTES} bytes. ` +
+              'This is a temporary server problem: wait about 30 seconds, then try once more with a narrower request (e.g. a smaller limit).'
+            );
+          }
+        }
+        text += decoder.decode();
+      } finally {
+        reader.releaseLock();
+      }
+    }
     let json: ApiResponse<T>;
     try {
       json = JSON.parse(text) as ApiResponse<T>;

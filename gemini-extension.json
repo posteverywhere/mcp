@@ -1,6 +1,6 @@
 {
   "name": "posteverywhere",
-  "version": "1.9.0",
+  "version": "1.14.1",
   "description": "Post and schedule social media content to all top platforms (Instagram, TikTok, YouTube, LinkedIn, X, Facebook, Threads, Pinterest, Bluesky, Telegram, Discord, WordPress, Google Business Profile) from Gemini CLI. Publishing, media upload, AI captions, campaigns, approvals, analytics.",
   "mcpServers": {
     "posteverywhere": {
